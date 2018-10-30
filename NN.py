@@ -72,16 +72,16 @@ print( np.any(np.isnan(data)))
 # Learning parameters
 learning_rate = 0.001
 zero_factor = 0.3
-batchsize = 32
+batchsize = 100
 
 # Number of hidden nodes in the network
-N1 = 800
-N2 = 800
-N3 = 800
-N4 = 800
-N5 = 800
-N6 = 800
-N7 = 800
+N1 = 100
+N2 = 100
+N3 = 100
+N4 = 100
+N5 = 100
+N6 = 100
+N7 = 100
 
 num_samples = np.shape(X_data)[1]
 input_size  = np.shape(X_data)[0]
@@ -252,7 +252,7 @@ with tf.Session() as sess:
     t1 = time.time()
     sess.run(init)
     print("Optimization Started")
-    for epoch in range(20):
+    for epoch in range(10):
         
         print("Epoch "+str(epoch))
 

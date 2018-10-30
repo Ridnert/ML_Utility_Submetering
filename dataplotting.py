@@ -5,7 +5,7 @@ import random
 #import scipy
 import os
 
-
+random.seed(2018)
 # PARAMETERS TO CHANGE
 
 number_of_training_slices = 200
@@ -85,7 +85,7 @@ for j in range(np.shape(X)[1]):                                                 
         else:
             # Filling NaN's with interpolation if the number of NaN's per slice is below some limit
             if np.sum(booleans[i*time_points:i*time_points+time_points,j]) > 21 and np.sum(booleans2[i*time_points:i*time_points+time_points,j]) < time_points*zeros_slice_percentage: # maximum of 4 Nans
-                if np.var(X[i*time_points:i*time_points+time_points,j]) > 0:
+                if np.var(X[i*time_points:i*time_points+time_points,j]) > 1e-4:
 
                     # Take non Constant Slices
 
@@ -136,7 +136,7 @@ for j in range(np.shape(X_test)[1]):                                           #
         #Then append them in X_resampled
   
         if  np.all(booleans_test[i*time_points:i*time_points+time_points,j]) == True and np.sum(booleans2_test[i*time_points:i*time_points+time_points,j]) < time_points*zeros_slice_percentage: 
-            if np.var(X_test[i*time_points:i*time_points+time_points,j]) > 0:  # Avoid having all the same inputs, want to capture some patterns
+            if np.var(X_test[i*time_points:i*time_points+time_points,j]) > 1e-4:  # Avoid having all the same inputs, want to capture some patterns
 
                 X_resampled_test.append(X_test[i*time_points:i*time_points+time_points,j])
                 count = count+1
@@ -174,7 +174,9 @@ for i in range(np.shape(X_big_test_temp)[1]):
     normalization_constant_max = np.max(X_big_test_temp[2:np.shape(X_big_test_temp)[0],i],axis=-1)
    
     X_big_test_temp[2:np.shape(X_big_test_temp)[0],i] = X_big_test_temp[2:np.shape(X_big_test_temp)[0],i] / normalization_constant_max
-    X_big_test_temp[2:np.shape(X_big_test_temp)[0],i] = X_big_test_temp[2:np.shape(X_big_test_temp)[0],i] - np.mean(X_big_test_temp[2:np.shape(X_big_test_temp)[0],i])
+    
+    X_big_test_temp[2:np.shape(X_big_test_temp)[0],i] = (X_big_test_temp[2:np.shape(X_big_test_temp)[0],i] - np.mean(X_big_test_temp[2:np.shape(X_big_test_temp)[0],i])) \
+        / max(np.sqrt(np.var(X_big_test_temp[2:np.shape(X_big_test_temp)[0],i])),1e-7)
 filename_test_time_series ="D:\Master_Thesis_Data\Test_Time_Series"
 if os.path.exists(filename_test_time_series + ".csv"):
     print("Removing old "+ filename_test_time_series + ".csv"+ " before writing new.")
@@ -301,12 +303,14 @@ for k in range(np.shape(data_shuffeled)[1]):
     normalization_constant_max = np.max(data_shuffeled[1:np.shape(data_shuffeled)[0],k],axis=-1)
    
     data_shuffeled[1:np.shape(data_shuffeled)[0],k] = data_shuffeled[1:np.shape(data_shuffeled)[0],k] / normalization_constant_max
-    data_shuffeled[1:np.shape(data_shuffeled)[0],k] = data_shuffeled[1:np.shape(data_shuffeled)[0],k]-np.mean(data_shuffeled[1:np.shape(data_shuffeled)[0],k])
+    data_shuffeled[1:np.shape(data_shuffeled)[0],k] = (data_shuffeled[1:np.shape(data_shuffeled)[0],k]-np.mean(data_shuffeled[1:np.shape(data_shuffeled)[0],k])) \
+      / max(np.sqrt(np.var(data_shuffeled[1:np.shape(data_shuffeled)[0],k])),1e-7)
 for i in range(np.shape(data_shuffeled_test)[1]):
     normalization_constant_max = np.max(data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i],axis=-1)
    
     data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i] = data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i] / normalization_constant_max
-    data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i] = data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i] - np.mean(data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i])
+    data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i] = (data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i] - np.mean(data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i])) \
+         / max(np.sqrt(np.var(data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i])),1e-7)
       
 #Makes sense to normalize the data?
 
