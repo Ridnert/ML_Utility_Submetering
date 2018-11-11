@@ -7,65 +7,77 @@ import time
 for slice_size in [ 12,24 ,30 ,48 ,72]: 
     ## WILL BE BAYESIAN_NN not for now
     print("TF Version:", tf.__version__)
-    ext = ".csv"
-    path = "D:\Master_Thesis_Data\Final_Data" + str(slice_size) + ext
-    path_y_hot = "D:\Master_Thesis_Data\Y_One_Hot"+ str(slice_size) + ext
-    path_test_data = "D:\Master_Thesis_Data\Test_Data"+ str(slice_size) + ext
-    path_y_hot_test = "D:\Master_Thesis_Data\Y_One_Hot_Test"+ str(slice_size) + ext
-    path_test_time_series = "D:\Master_Thesis_Data\Test_Time_Series"+ str(slice_size) + ext
-
-
-    # Loading Training Data
-    df = pd.read_csv(path,sep=';',header=None)
-    data = df.values
-    df_y_hot = pd.read_csv(path_y_hot,sep=';',header=None)
-    y_one_hot = df_y_hot.values
-    number_of_classes = np.shape(y_one_hot)[0]
-
-
-
-
-    # Loading Test Data
-    df_test_data = pd.read_csv(path_test_data,sep=';',header=None)
-    test_data    = df_test_data.values
-    Num_Test_Customers = np.shape(test_data)[1]
-    shape_test = [np.shape(test_data)[0],Num_Test_Customers]                    # Test data shapes
-    df_y_hot_test = pd.read_csv(path_y_hot_test,sep=';',header=None)
-    y_one_hot_test = df_y_hot_test.values
-    test_data_X    = test_data[1:np.shape(test_data)[0],:] # Extract time series
-    test_data_Y    = test_data[0,:]                        # Extract Labels
-
     
 
-    # Test data full time series for final evaluation of sugggested method
-    df_test_time_series = pd.read_csv(path_test_time_series,sep=';',header=None)
-    test_time_series = df_test_time_series.values
-    shape_test_time_series = [np.shape(test_time_series)[0],np.shape(test_time_series)[1]] 
+    def load_data(slice_size):
+        # This function loads all of the data that is used for training, takes slice_size as parameter
 
-    # Split the final evaluation data into meternumber, label and data
-    test_data_meter_time_series = test_time_series[0,:]
-    test_data_Y_time_series = test_time_series[1,:]
-    test_data_X_time_series = test_time_series[2:shape_test_time_series[0],:]
-    number_of_meters = int(np.max(np.unique(test_data_meter_time_series)))
-    print(" There are " +str(number_of_meters) + " unique meters in the test dataset.")
-
-    y_one_hot_test_time_series = np.zeros([number_of_classes,np.shape(test_time_series)[1]])
-    for k in range(np.shape(test_time_series)[1]):
-        for p in range(number_of_classes):
-            if p+1 == test_data_Y_time_series[k]:
-                y_one_hot_test_time_series[p,k] = 1
-    shape_test_time_series = [np.shape(test_time_series)[0],np.shape(test_time_series)[1]]   
-
-
-    y_data = data[0,:]
-    X_data  = np.asarray(data[1:np.shape(data)[0],:])
-
-    print( np.any(np.isnan(data)))
+        ext = ".csv"
+        path = "D:\Master_Thesis_Data\Final_Data" + str(slice_size) + ext
+        path_y_hot = "D:\Master_Thesis_Data\Y_One_Hot"+ str(slice_size) + ext
+        path_test_data = "D:\Master_Thesis_Data\Test_Data"+ str(slice_size) + ext
+        path_y_hot_test = "D:\Master_Thesis_Data\Y_One_Hot_Test"+ str(slice_size) + ext
+        path_test_time_series = "D:\Master_Thesis_Data\Test_Time_Series"+ str(slice_size) + ext
+        # Loading Training Data
+        df = pd.read_csv(path,sep=';',header=None)
+        data = df.values
+        df_y_hot = pd.read_csv(path_y_hot,sep=';',header=None)
+        y_one_hot = df_y_hot.values
+        number_of_classes = np.shape(y_one_hot)[0]
 
 
 
+
+        # Loading Test Data
+        df_test_data = pd.read_csv(path_test_data,sep=';',header=None)
+        test_data    = df_test_data.values
+        Num_Test_Customers = np.shape(test_data)[1]
+        shape_test = [np.shape(test_data)[0],Num_Test_Customers]                    # Test data shapes
+        df_y_hot_test = pd.read_csv(path_y_hot_test,sep=';',header=None)
+        y_one_hot_test = df_y_hot_test.values
+        test_data_X    = test_data[1:np.shape(test_data)[0],:] # Extract time series
+        test_data_Y    = test_data[0,:]                        # Extract Labels
+
+        
+
+        # Test data full time series for final evaluation of sugggested method
+        df_test_time_series = pd.read_csv(path_test_time_series,sep=';',header=None)
+        test_time_series = df_test_time_series.values
+        shape_test_time_series = [np.shape(test_time_series)[0],np.shape(test_time_series)[1]] 
+
+        # Split the final evaluation data into meternumber, label and data
+        test_data_meter_time_series = test_time_series[0,:]
+        test_data_Y_time_series = test_time_series[1,:]
+        test_data_X_time_series = test_time_series[2:shape_test_time_series[0],:]
+        number_of_meters = int(np.max(np.unique(test_data_meter_time_series)))
+        print(" There are " +str(number_of_meters) + " unique meters in the test dataset.")
+
+        y_one_hot_test_time_series = np.zeros([number_of_classes,np.shape(test_time_series)[1]])
+        for k in range(np.shape(test_time_series)[1]):
+            for p in range(number_of_classes):
+                if p+1 == test_data_Y_time_series[k]:
+                    y_one_hot_test_time_series[p,k] = 1
+        shape_test_time_series = [np.shape(test_time_series)[0],np.shape(test_time_series)[1]]   
+
+
+        y_data = data[0,:]
+        X_data  = np.asarray(data[1:np.shape(data)[0],:])
+
+        print( np.any(np.isnan(data)))
+        X_train =  np.transpose(X_data[:,:])
+        y_train = np.transpose(y_one_hot[:,:])
+        X_val   = np.transpose(test_data_X[:,:])
+        y_val   = np.transpose(y_one_hot_test[:,:])
+        y_data_confusion = test_data_Y
+
+        return y_train, X_train, X_val, y_val, y_data_confusion, test_data_X_time_series,test_data_Y_time_series, \
+            number_of_classes,test_data_meter_time_series,number_of_meters,y_one_hot_test_time_series
+
+    ############ LOADING DATA ##################################
+    y_train, X_train, X_val, y_val, y_data_confusion, test_data_X_time_series,test_data_Y_time_series, number_of_classes,test_data_meter_time_series,number_of_meters,y_one_hot_test_time_series = \
+        load_data(slice_size)
     ########################################################## NETWORK #############################################
-
+      
     # This code implements A HIDDEN LAYER NEURAL NETWORK With seven fully connected layers,
     # dropout and batch normalization
 
@@ -83,20 +95,13 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
     N6 = 800
     N7 = 800
 
-    num_samples = np.shape(X_data)[1]
-    input_size  = np.shape(X_data)[0]
+    num_samples = np.shape(X_train)[0]
+    input_size  = np.shape(X_train)[1]
     num_classes = number_of_classes
     Nbatches    = int(num_samples/batchsize)
     epsilon     = 1e-8
 
 
-
-    ################ Transposing datasets for correct input shape to the network ##################
-    X_train =  np.transpose(X_data[:,:])
-    y_train = np.transpose(y_one_hot[:,:])
-    X_val   = np.transpose(test_data_X[:,:])
-    y_val   = np.transpose(y_one_hot_test[:,:])
-    y_data_confusion = test_data_Y
 
     print("Amount of training data is: "+str(np.shape(X_train)[0]))
     print("Amount of validation data is: "+str(np.shape(X_val)[0]))
@@ -104,7 +109,6 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
     X = tf.placeholder(tf.float32, [None,input_size]) 
     Y = tf.placeholder(tf.float32, [None,num_classes])
     dropout = tf.placeholder_with_default(1.0, shape=())
-
     initializer = tf.contrib.layers.xavier_initializer()
 
     ###################################################################################################################
@@ -161,8 +165,9 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
             fc7 = tf.nn.batch_normalization(fc7,batch_mean7,batch_variance7,biases['beta7'],biases['scale7'],epsilon)
             fc7  =tf.nn.relu(fc7)
             fc7 = tf.nn.dropout(fc7,dropout)
-    # Return outputs
+
         with tf.name_scope("Output_Layer"):
+            # Return outputs
             pred = tf.nn.bias_add(tf.matmul(fc7,weights['out']),biases['biout'])
 
         return pred
@@ -252,7 +257,7 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
         t1 = time.time()
         sess.run(init)
         print("Optimization Started")
-        for epoch in range(10):
+        for epoch in range(5):
             
             print("Epoch "+str(epoch))
 
@@ -288,17 +293,16 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
         ####################################################################################
                         ##################################################
             
-        print("Rank of Test matrix is " +str(np.linalg.matrix_rank(test_time_series)))
+       
         
-        print("Number of Test Time Series is " +str(shape_test_time_series))
-        print()
+        
         print("Starting To Compute The final test accuracy")
         
         correct_test_prediction = []
-        num_of_test_samples = 5000
+        num_of_test_samples = 500
         min_num_of_test_samples = 100
         # start looping through each separate time series
-    
+       
         count_class = np.zeros([ num_classes ])
         count_meter = np.zeros([ number_of_meters ])
         test_label = []

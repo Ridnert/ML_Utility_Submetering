@@ -2,24 +2,43 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import random
-#import scipy
+from scipy import interpolate
 import os
+from sklearn.preprocessing import minmax_scale
 
 
 # PARAMETERS TO CHANGE
+## INTERPOLATIONFUNCTION FOR SLICES
+
+def interp(slice):
+    
+    # Finding positive indices to build function
+    ind = np.where(slice >= 0)
+    y = slice[ind]
+
+    
+    f = interpolate.interp1d(ind[0],y, fill_value= "extrapolate",kind='quadratic')
+
+
+    xnew = np.arange(0,np.shape(slice)[0] , 1)
+
+    ynew = f(xnew)
+    ynew[np.where(ynew < 0)] = 0 # Avoids extrapolating into negative numbers
+    return ynew
 
 def shuffle_data(input_data):
     np.random.seed(seed=2018)
     index  = np.arange(0,np.shape(input_data)[1])
     choice = np.random.choice(index,np.shape(input_data)[1],replace=False)
-    input_data   = input_data[:,choice]
-    return input_data
+    output_data = np.zeros(np.shape(input_data))
+    output_data   = input_data[:,choice]
+    return output_data
 
 def main(time_points):
     np.random.seed(seed=2018)
     random.seed(2018)
     print("Number of time_Points is " + str(time_points))
-    number_of_training_slices = 100
+    number_of_training_slices = 200
     number_of_test_slices     = 100
     zeros_slice_percentage = 0.3
 
@@ -39,7 +58,7 @@ def main(time_points):
 
 
     training_percentage = 0.9
-    threshhold = 1000              # To remove outliers                         
+    threshhold = 5000              # To remove outliers                         
         # 720 is one month 9000 a year
     indices = data[:,:] < threshhold
     data[indices == False] = -1 
@@ -76,40 +95,40 @@ def main(time_points):
             # Take 10 non Constant Slices from each sample
     
         #  if count < num_of_training_slices: # Change this to change the number of snippets from each time-series
-            if  np.all(booleans[i*time_points:i*time_points+time_points,j]) == True and np.sum(booleans2[i*time_points:i*time_points+time_points,j]) < time_points*zeros_slice_percentage:
+            if  np.all(booleans[i*time_points:i*time_points+time_points,j]) == True and \
+            np.sum(booleans2[i*time_points:i*time_points+time_points,j]) < time_points*zeros_slice_percentage and\
+            np.var(X[i*time_points:i*time_points+time_points,j]) > 1e-3:
 
-                if np.var(X[i*time_points:i*time_points+time_points,j]) > 1e-1:
+               
 
-                    var = np.var(X[i*time_points:i*time_points+time_points,j]) # Adding some augmentation to the data random noise
+                var = np.var(X[i*time_points:i*time_points+time_points,j]) # Adding some augmentation to the data random noise
 
-                    X_resampled.append(X[i*time_points:i*time_points+time_points,j]) #+ np.random.normal(0,np.sqrt(var),np.shape(X[i*time_points:i*time_points+time_points,j])))
-                    y_resampled.append(label)
-                    meter_resampled.append(j)
+                X_resampled.append(X[i*time_points:i*time_points+time_points,j]) #+ np.random.normal(0,np.sqrt(var),np.shape(X[i*time_points:i*time_points+time_points,j])))
+                y_resampled.append(label)
+                meter_resampled.append(j)
 
-                    count = count+1
+                count = count+1
 
-            else:
+            elif np.sum(booleans[i*time_points:i*time_points+time_points,j]) > 0.8*time_points and \
+                np.sum(booleans2[i*time_points:i*time_points+time_points,j]) < time_points*zeros_slice_percentage and \
+                np.var(X[i*time_points:i*time_points+time_points,j]) > 1e-3:
                 # Filling NaN's with interpolation if the number of NaN's per slice is below some limit
-                if np.sum(booleans[i*time_points:i*time_points+time_points,j]) > 0.9*time_points and np.sum(booleans2[i*time_points:i*time_points+time_points,j]) < time_points*zeros_slice_percentage: # maximum of 4 Nans
-                    if np.var(X[i*time_points:i*time_points+time_points,j]) > 1e-1:
+                
 
-                        # Take non Constant Slices
+                # Take non Constant Slices
 
-
-                        nan_indices = np.where( booleans[i*time_points:i*time_points+time_points,j] == False )
-                        for k in nan_indices:
-                           X[i*time_points+k,j] = np.nanmean(X[i*time_points:i*time_points+time_points,j]) # setting Nan's to mean value
-
-                        X_resampled.append(X[i*time_points:i*time_points+time_points,j])
-                        y_resampled.append(label)
-                        meter_resampled.append(j)
-                        count = count+1
+                out = interp(X[i*time_points:i*time_points+time_points,j])
+               
+                X_resampled.append(out)
+                y_resampled.append(label)
+                meter_resampled.append(j)
+                count = count+1
 
 
-                #  Monitor the Slices that are left out
-                if np.any(booleans[i*time_points:i*time_points+time_points,j]) == True and np.sum(booleans2[i*time_points:i*time_points+time_points,j]) < time_points*zeros_slice_percentage :   # If anyone is not nan
-                    left_out_slice.append(X[i*time_points:i*time_points+time_points,j])
-                    boolvec.append(time_points-np.sum(booleans[i*time_points:i*time_points+time_points,j]))
+            else: # Monitor the Slices that are left out
+                  
+                left_out_slice.append(X[i*time_points:i*time_points+time_points,j])
+                boolvec.append(time_points-np.sum(booleans[i*time_points:i*time_points+time_points,j]))
 
         number_of_chunks_per_customer.append(count)
 
@@ -142,7 +161,7 @@ def main(time_points):
             #Then append them in X_resampled
     
             if  np.all(booleans_test[i*time_points:i*time_points+time_points,j]) == True and np.sum(booleans2_test[i*time_points:i*time_points+time_points,j]) < time_points*zeros_slice_percentage: 
-                if np.var(X_test[i*time_points:i*time_points+time_points,j]) > 1e-1:  # Avoid having all the same inputs, want to capture some patterns
+                if np.var(X_test[i*time_points:i*time_points+time_points,j]) > 1e-3:  # Avoid having all the same inputs, want to capture some patterns
 
                     X_resampled_test.append(X_test[i*time_points:i*time_points+time_points,j])
                     count = count+1
@@ -164,25 +183,18 @@ def main(time_points):
     X_big_test = np.concatenate([[meter_resampled_test], X_big_test]   ,axis=0)
                                     
     # Shuffle X_big
-                                        
-    ind = np.arange(0,np.shape(X_big)[1])
-    ind = np.random.choice(ind,np.shape(X_big)[1],replace = False)
-    ind_test = np.arange(0,np.shape(X_big_test)[1])
-    ind_test = np.random.choice(ind_test,np.shape(X_big_test)[1],replace = False)
-    X_big = X_big[:,ind]
-    X_big_test = X_big_test[:,ind_test]
-
-    # Here we Wish to write the X_big_test to file because then we have data to perform this final test classification task later
-
+    X_big = shuffle_data(X_big)                                    
+  
     X_big_test_temp = np.zeros(np.shape(X_big_test))
-    X_big_test_temp[:,:] = X_big_test[:,:]      
-    for i in range(np.shape(X_big_test_temp)[1]):
-        #normalization_constant_max = np.max(X_big_test_temp[2:np.shape(X_big_test_temp)[0],i],axis=-1)
     
-        #X_big_test_temp[2:np.shape(X_big_test_temp)[0],i] = X_big_test_temp[2:np.shape(X_big_test_temp)[0],i] / normalization_constant_max
+    X_big_test_temp[:,:] = shuffle_data(X_big_test[:,:])
+    
+    
+    X_big_test_temp[2:np.shape(X_big_test_temp)[0],:] = \
+        minmax_scale(X_big_test[2:np.shape(X_big_test_temp)[0],:],feature_range=(0,1),axis=0)
+    
         
-        X_big_test_temp[2:np.shape(X_big_test_temp)[0],i] = (X_big_test_temp[2:np.shape(X_big_test_temp)[0],i] - np.mean(X_big_test_temp[2:np.shape(X_big_test_temp)[0],i])) \
-            / np.maximum(np.sqrt(np.var(X_big_test_temp[2:np.shape(X_big_test_temp)[0],i])),1e-7)
+        
     filename_test_time_series ="D:\Master_Thesis_Data\Test_Time_Series" + str(time_points)
     if os.path.exists(filename_test_time_series + ".csv"):
         print("Removing old "+ filename_test_time_series + ".csv"+ " before writing new.")
@@ -191,7 +203,7 @@ def main(time_points):
 
     # clears some memory
     del(X_big_test_temp)
-
+    
     # Create Loop for taking max number of samples from each meter
                                         
     X_resampled      = []
@@ -231,11 +243,11 @@ def main(time_points):
     plt.show()
                                         
     # To keep rest of code running we remove first row so we are left with data containg the label and the data.
-    X_big = np.zeros([np.shape(X_big_tmp)[0]-1,np.shape(X_big_tmp)[1]])
+    X_big      = np.zeros([np.shape(X_big_tmp)[0]-1,np.shape(X_big_tmp)[1]])
     X_big_test = np.zeros([np.shape(X_big_test_tmp)[0]-1,np.shape(X_big_test_tmp)[1]])
 
 
-    X_big[:,:] = X_big_tmp[1:np.shape(X_big_tmp)[0],:]
+    X_big[:,:]      = X_big_tmp[1:np.shape(X_big_tmp)[0],:]
     X_big_test[:,:] = X_big_test_tmp[1:np.shape(X_big_test_tmp)[0],:]                                  
     del(X_big_tmp)
     del(X_big_test_tmp)
@@ -244,7 +256,7 @@ def main(time_points):
 
     # Sorting the datamatrices in order to take same number of samples from each class
     X_big = X_big[:,np.argsort(X_big[0,:])]
-                            
+    print(X_big)
     X_big_test = X_big_test[:,np.argsort(X_big_test[0,:])]
 
     a,return_index,return_counts = np.unique(X_big[0,:], return_index=True, return_counts=True)
@@ -262,31 +274,34 @@ def main(time_points):
     print()
 
     #Building final dataset of min_number_of_samples per class, randomly sampled and shuffeled
-    min_number_of_samples = np.min(return_counts) # The number of samples from the smallest class
+    min_number_of_samples      = np.min(return_counts) # The number of samples from the smallest class
     min_number_of_samples_test = np.min(return_counts_test)
 
     indexvector = np.arange(0,np.shape(X_big)[1]) # Indices of all samples
     indexvector_test = np.arange(0,np.shape(X_big_test)[1])
-    data_shuffeled = np.zeros([time_points+1,number_of_classes*min_number_of_samples]) #Preallocate memory for final data array.
-    data_shuffeled_test = np.zeros([time_points+1,number_of_classes*min_number_of_samples_test])
+    
+    data_shuffeled = np.ones([time_points+1,number_of_classes*min_number_of_samples]) #Preallocate memory for final data array.
+    data_shuffeled_test = np.ones([time_points+1,number_of_classes*min_number_of_samples_test])
 
 
     for i in range(number_of_classes):
     #Picks min_number_of_samples random indices from each class and puts them in the final data array.
-        indexchoice = np.random.choice(indexvector[return_index[i]:return_index[i]+return_counts[i]],min_number_of_samples,replace=False) 
+        indexchoice = np.random.choice(indexvector[return_index[i]:return_index[i] + return_counts[i]],\
+                                       min_number_of_samples,replace=False) 
 
-        indexchoice_test = np.random.choice(indexvector_test[return_index_test[i]:return_index_test[i]+return_counts_test[i]],min_number_of_samples_test,replace=False)
+        indexchoice_test = np.random.choice(indexvector_test[return_index_test[i]:return_index_test[i]+return_counts_test[i]],\
+                                            min_number_of_samples_test,replace=False)
 
-        data_shuffeled[:,i*min_number_of_samples:i*min_number_of_samples+min_number_of_samples]                       = X_big[:,indexchoice]
+        data_shuffeled[:,i*min_number_of_samples:(i+1)*min_number_of_samples] = \
+        X_big[:,indexchoice]
 
-        data_shuffeled_test[:,i*min_number_of_samples_test:i*min_number_of_samples_test+min_number_of_samples_test]   = X_big_test[:,indexchoice_test]
+        data_shuffeled_test[:,i*min_number_of_samples_test:i*min_number_of_samples_test+min_number_of_samples_test] = \
+        X_big_test[:,indexchoice_test]
 
     print( np.any(np.isnan(data_shuffeled)))
     print(np.any(np.isnan(data_shuffeled_test)))
     # For checking that this works
     a2,return_index2,return_counts2 = np.unique(data_shuffeled[0,:], return_index=True, return_counts=True)  
-
-
     a2_test,return_index2_test,return_counts2_test = np.unique(data_shuffeled_test[0,:],return_index = True, return_counts = True)
 
     print("The number of samples in each class is " +str(min_number_of_samples)+".")
@@ -302,34 +317,19 @@ def main(time_points):
     print()
 
     # Normalization
-    # Looping over the columns, normalizing each sample to values between -1 and 1.
-    for k in range(np.shape(data_shuffeled)[1]):
-        normalization_constant_max = np.max(data_shuffeled[1:np.shape(data_shuffeled)[0],k],axis=-1)
     
-        data_shuffeled[1:np.shape(data_shuffeled)[0],k] = data_shuffeled[1:np.shape(data_shuffeled)[0],k] / normalization_constant_max
-        data_shuffeled[1:np.shape(data_shuffeled)[0],k] = (data_shuffeled[1:np.shape(data_shuffeled)[0],k]-np.mean(data_shuffeled[1:np.shape(data_shuffeled)[0],k])) \
-        / np.maximum(np.sqrt(np.var(data_shuffeled[1:np.shape(data_shuffeled)[0],k])),1e-7)
-
-    for i in range(np.shape(data_shuffeled_test)[1]):
-
-
-        normalization_constant_max = np.max(data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i],axis=-1)
+    data_shuffeled[1:np.shape(data_shuffeled)[0],:] = \
+        minmax_scale(data_shuffeled[1:np.shape(data_shuffeled)[0],:],feature_range = (0,1),axis = 0,copy=False)
     
-        data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i] = data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i] / normalization_constant_max
-        data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i] = (data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i] - np.mean(data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i])) \
-            / np.maximum(np.sqrt(np.var(data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],i])),1e-7)
-        
-
-    print( np.any(np.isnan(data_shuffeled)))
+    data_shuffeled_test[1:np.shape(data_shuffeled_test)[0],:] = \
+        minmax_scale(data_shuffeled_test[1:np.shape(data_shuffeled)[0],:],feature_range=(0,1),axis=0,copy=False)
+    
+    print("Check for NaN's after feature scaling")
+    print(np.any(np.isnan(data_shuffeled)))
     print(np.any(np.isnan(data_shuffeled_test)))
     # Final shuffle of the training data
-    indexvector2 = np.arange(0,np.shape(data_shuffeled)[1])
-
-    indexchoice2 = np.random.choice(indexvector2, len(indexvector2),replace=False)
-    print(indexchoice2)
-
-    data_shuffeled = data_shuffeled[:,indexchoice2]
-
+   
+    data_shuffeled = shuffle_data(data_shuffeled)
     # Extract final data, write to csv?
     y_final = data_shuffeled[0,:]
     X_final  = data_shuffeled[1:np.shape(data_shuffeled)[0],:]
@@ -387,5 +387,5 @@ def main(time_points):
 
 
 
-for time_points in [12,24,30,48,72,100]:   
+for time_points in [24,30,48]:   
     main(time_points)
