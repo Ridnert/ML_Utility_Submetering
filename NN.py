@@ -1,81 +1,76 @@
+from __future__ import absolute_import
+from __future__ import print_function
+from __future__ import division
+import os
+import time
+
 import tensorflow as tf
+import tensorflow.contrib.layers as layers
+from six.moves import range, zip
 import numpy as np
+import zhusuan as zs
 import pandas as pd
 import matplotlib.pyplot as plt
-from random import shuffle
-import time
-for slice_size in [ 12,24 ,30 ,48 ,72]: 
+
     ## WILL BE BAYESIAN_NN not for now
-    print("TF Version:", tf.__version__)
-    
-
-    def load_data(slice_size):
-        # This function loads all of the data that is used for training, takes slice_size as parameter
-
-        ext = ".csv"
-        path = "D:\Master_Thesis_Data\Final_Data" + str(slice_size) + ext
-        path_y_hot = "D:\Master_Thesis_Data\Y_One_Hot"+ str(slice_size) + ext
-        path_test_data = "D:\Master_Thesis_Data\Test_Data"+ str(slice_size) + ext
-        path_y_hot_test = "D:\Master_Thesis_Data\Y_One_Hot_Test"+ str(slice_size) + ext
-        path_test_time_series = "D:\Master_Thesis_Data\Test_Time_Series"+ str(slice_size) + ext
-        # Loading Training Data
-        df = pd.read_csv(path,sep=';',header=None)
-        data = df.values
-        df_y_hot = pd.read_csv(path_y_hot,sep=';',header=None)
-        y_one_hot = df_y_hot.values
-        number_of_classes = np.shape(y_one_hot)[0]
+print("TF Version:", tf.__version__)
 
 
+def load_data(slice_size):
+  # This function loads all of the data that is used for training, takes slice_size as parameter
+
+    ext = ".csv"
+    path = "D:\Master_Thesis_Data\Final_Data" + str(slice_size) + ext
+    path_y_hot = "D:\Master_Thesis_Data\Y_One_Hot"+ str(slice_size) + ext
+    path_test_data = "D:\Master_Thesis_Data\Test_Data"+ str(slice_size) + ext
+    path_y_hot_test = "D:\Master_Thesis_Data\Y_One_Hot_Test"+ str(slice_size) + ext
+    path_test_time_series = "D:\Master_Thesis_Data\Test_Time_Series"+ str(slice_size) + ext
+    # Loading Training Data
+    df = pd.read_csv(path,sep=';',header=None)
+    data = df.values
+    df_y_hot = pd.read_csv(path_y_hot,sep=';',header=None)
+    y_one_hot = df_y_hot.values
+    number_of_classes = np.shape(y_one_hot)[0]
 
 
-        # Loading Test Data
-        df_test_data = pd.read_csv(path_test_data,sep=';',header=None)
-        test_data    = df_test_data.values
-        Num_Test_Customers = np.shape(test_data)[1]
-        shape_test = [np.shape(test_data)[0],Num_Test_Customers]                    # Test data shapes
-        df_y_hot_test = pd.read_csv(path_y_hot_test,sep=';',header=None)
-        y_one_hot_test = df_y_hot_test.values
-        test_data_X    = test_data[1:np.shape(test_data)[0],:] # Extract time series
-        test_data_Y    = test_data[0,:]                        # Extract Labels
-
-        
-
-        # Test data full time series for final evaluation of sugggested method
-        df_test_time_series = pd.read_csv(path_test_time_series,sep=';',header=None)
-        test_time_series = df_test_time_series.values
-        shape_test_time_series = [np.shape(test_time_series)[0],np.shape(test_time_series)[1]] 
-
-        # Split the final evaluation data into meternumber, label and data
-        test_data_meter_time_series = test_time_series[0,:]
-        test_data_Y_time_series = test_time_series[1,:]
-        test_data_X_time_series = test_time_series[2:shape_test_time_series[0],:]
-        number_of_meters = int(np.max(np.unique(test_data_meter_time_series)))
-        print(" There are " +str(number_of_meters) + " unique meters in the test dataset.")
-
-        y_one_hot_test_time_series = np.zeros([number_of_classes,np.shape(test_time_series)[1]])
-        for k in range(np.shape(test_time_series)[1]):
-            for p in range(number_of_classes):
-                if p+1 == test_data_Y_time_series[k]:
-                    y_one_hot_test_time_series[p,k] = 1
-        shape_test_time_series = [np.shape(test_time_series)[0],np.shape(test_time_series)[1]]   
 
 
-        y_data = data[0,:]
-        X_data  = np.asarray(data[1:np.shape(data)[0],:])
+    # Loading Test Data
+    df_test_data = pd.read_csv(path_test_data,sep=';',header=None)
+    test_data    = df_test_data.values
+    Num_Test_Customers = np.shape(test_data)[1]
+    shape_test = [np.shape(test_data)[0],Num_Test_Customers]                    # Test data shapes
+    df_y_hot_test = pd.read_csv(path_y_hot_test,sep=';',header=None)
+    y_one_hot_test = df_y_hot_test.values
+    test_data_X    = test_data[2:np.shape(test_data)[0],:] # Extract time series
+    test_data_Y    = test_data[1,:]                        # Extract Labels
+    test_data_meter = test_data[0,:]
 
-        print( np.any(np.isnan(data)))
-        X_train =  np.transpose(X_data[:,:])
-        y_train = np.transpose(y_one_hot[:,:])
-        X_val   = np.transpose(test_data_X[:,:])
-        y_val   = np.transpose(y_one_hot_test[:,:])
-        y_data_confusion = test_data_Y
 
-        return y_train, X_train, X_val, y_val, y_data_confusion, test_data_X_time_series,test_data_Y_time_series, \
-            number_of_classes,test_data_meter_time_series,number_of_meters,y_one_hot_test_time_series
+   
+    number_of_meters = int(np.max(np.unique(test_data_meter)) ) # METER NUMBER RANGE
+    print(" There are " +str(number_of_meters) + " unique meters in the test dataset.")
 
+ 
+
+    y_data = data[1,:]
+    X_data  = np.asarray(data[2:np.shape(data)[0],:])
+
+    print( np.any(np.isnan(data)))
+    x_train =  np.transpose(X_data[:,:])
+    y_train = np.transpose(y_one_hot)
+    x_val   = np.transpose(test_data_X[:,:])
+    y_data_confusion = test_data_Y
+    y_val   =  np.transpose(y_one_hot_test)
+
+    return y_train, x_train, x_val, y_val, y_data_confusion,test_data_meter, \
+        number_of_classes,number_of_meters
+
+def main(slice_size):
+    print("Slice_Size: ", str(slice_size))
     ############ LOADING DATA ##################################
-    y_train, X_train, X_val, y_val, y_data_confusion, test_data_X_time_series,test_data_Y_time_series, number_of_classes,test_data_meter_time_series,number_of_meters,y_one_hot_test_time_series = \
-        load_data(slice_size)
+    y_train, X_train, X_val, y_val, y_data_confusion,test_data_meter, \
+        number_of_classes,number_of_meters = load_data(slice_size)
     ########################################################## NETWORK #############################################
       
     # This code implements A HIDDEN LAYER NEURAL NETWORK With seven fully connected layers,
@@ -84,7 +79,7 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
     # Learning parameters
     learning_rate = 0.001
     zero_factor = 0.3
-    batchsize = 16
+    batchsize = 50
 
     # Number of hidden nodes in the network
     N1 = 800
@@ -99,76 +94,59 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
     input_size  = np.shape(X_train)[1]
     num_classes = number_of_classes
     Nbatches    = int(num_samples/batchsize)
-    epsilon     = 1e-8
+    eps     = 1e-5
 
 
 
     print("Amount of training data is: "+str(np.shape(X_train)[0]))
     print("Amount of validation data is: "+str(np.shape(X_val)[0]))
     # Placeholder for datavectors
-    X = tf.placeholder(tf.float32, [None,input_size]) 
-    Y = tf.placeholder(tf.float32, [None,num_classes])
+    X = tf.placeholder(tf.float32, shape = (None,input_size)) 
+    
+    y = tf.placeholder(tf.int32, shape = (None,number_of_classes))
     dropout = tf.placeholder_with_default(1.0, shape=())
+    istraining = tf.placeholder(tf.bool, shape=[])
+    learning_rate_ph = tf.placeholder(tf.float32, shape=())
+
     initializer = tf.contrib.layers.xavier_initializer()
 
     ###################################################################################################################
     ########################################### Define the network#####################################################
     ###################################################################################################################
-    def mlp(X, weights, biases,dropout):
+    def mlp(X, weights, biases,dropout,istraining):
         with tf.name_scope("Layer_1"):
             #Layer One
-            fc1 = tf.matmul(X,weights['wh1'])
-            batch_mean1,batch_variance1 = tf.nn.moments(fc1,[0])
-            fc1 = tf.nn.batch_normalization(fc1,batch_mean1,batch_variance1,biases['beta1'],biases['scale1'],epsilon) 
+            fc1 = tf.nn.bias_add(tf.matmul(X,weights['wh1']),biases['b1'])
+           # batch_mean1,batch_variance1 = tf.nn.moments(fc1,[0])
+           # fc1 = tf.nn.batch_normalization(fc1,batch_mean1,batch_variance1,biases['beta1'],biases['scale1'],epsilon) 
+            #fc1 = tf.contrib.layers.batch_norm(fc1,is_training=istraining)
+            #fc1 = tf.layers.batch_normalization(fc1, training=istraining)
             fc1 = tf.nn.relu(fc1)
             fc1 = tf.nn.dropout(fc1,dropout)
         with tf.name_scope("Layer_2"):
             # Layer Two
-            fc2 = tf.matmul(fc1,weights['wh2'])
-            batch_mean2,batch_variance2 = tf.nn.moments(fc2,[0])
-            fc2 = tf.nn.batch_normalization(fc2,batch_mean2,batch_variance2,biases['beta2'],biases['scale2'],epsilon) 
+            fc2 = tf.nn.bias_add(tf.matmul(fc1,weights['wh2']),biases['b2'])
+           # batch_mean2,batch_variance2 = tf.nn.moments(fc2,[0])
+            #fc2 = tf.nn.batch_normalization(fc2,batch_mean2,batch_variance2,biases['beta2'],biases['scale2'],epsilon) 
+            #fc2 = tf.contrib.layers.batch_norm(fc2,is_training=istraining)
+            #fc2 = tf.layers.batch_normalization(fc2, training=istraining)
             fc2 = tf.nn.relu(fc2)
             fc2 = tf.nn.dropout(fc2,dropout)
         with tf.name_scope("Layer_3"):
             # Layer Three
-            fc3 = tf.matmul(fc2,weights['wh3'])
-            batch_mean3,batch_variance3 = tf.nn.moments(fc3,[0])
-            fc3 = tf.nn.batch_normalization(fc3,batch_mean3,batch_variance3,biases['beta3'],biases['scale3'],epsilon) 
+            fc3 = tf.nn.bias_add(tf.matmul(fc2,weights['wh3']),biases['b3'])
+          #  batch_mean3,batch_variance3 = tf.nn.moments(fc3,[0])
+           # fc3 = tf.nn.batch_normalization(fc3,batch_mean3,batch_variance3,biases['beta3'],biases['scale3'],epsilon) 
+           # fc3 = tf.contrib.layers.batch_norm(fc3,is_training=istraining)
+            #fc3 = tf.layers.batch_normalization(fc3, training=istraining)
             fc3 = tf.nn.relu(fc3)
             fc3 = tf.nn.dropout(fc3,dropout)
-        with tf.name_scope("Layer_4"):
-            # Layer Four
-            fc4 = tf.matmul(fc3,weights['wh4'])
-            batch_mean4,batch_variance4 = tf.nn.moments(fc4,[0])
-            fc4 = tf.nn.batch_normalization(fc4,batch_mean4,batch_variance4,biases['beta4'],biases['scale4'],epsilon) 
-            fc4 = tf.nn.relu(fc4)
-            fc4 = tf.nn.dropout(fc4,dropout)
-        with tf.name_scope("Layer_5"):
-            # Layer Five
-            fc5 = tf.matmul(fc4,weights['wh5'])
-            batch_mean5,batch_variance5 = tf.nn.moments(fc5,[0])
-            fc5 = tf.nn.batch_normalization(fc5,batch_mean5,batch_variance5,biases['beta5'],biases['scale5'],epsilon) 
-            fc5 = tf.nn.relu(fc5)
-            fc5 = tf.nn.dropout(fc5,dropout)
-        with tf.name_scope("Layer_6"):
-            # Layer Six
-            fc6 = tf.matmul(fc5,weights['wh6'])
-            batch_mean6,batch_variance6 = tf.nn.moments(fc6,[0])
-            fc6 = tf.nn.batch_normalization(fc6,batch_mean6,batch_variance6,biases['beta6'],biases['scale6'],epsilon) 
-            fc6 = tf.nn.relu(fc6)
-            fc6 = tf.nn.dropout(fc6,dropout)
-
-        with tf.name_scope("Layer_7"):
-            # Layer 7
-            fc7 = tf.matmul(fc6,weights['wh7'])
-            batch_mean7,batch_variance7 = tf.nn.moments(fc7,[0])
-            fc7 = tf.nn.batch_normalization(fc7,batch_mean7,batch_variance7,biases['beta7'],biases['scale7'],epsilon)
-            fc7  =tf.nn.relu(fc7)
-            fc7 = tf.nn.dropout(fc7,dropout)
+     
 
         with tf.name_scope("Output_Layer"):
             # Return outputs
-            pred = tf.nn.bias_add(tf.matmul(fc7,weights['out']),biases['biout'])
+            pred = tf.nn.bias_add(tf.matmul(fc3,weights['out']),biases['biout'])
+            #pred  =tf.nn.relu(pred)
 
         return pred
 
@@ -189,18 +167,18 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
         # Seventh Hidden Layer
         'wh7': tf.Variable(initializer([N6,N7])),
         # Output layer
-        'out': tf.Variable(initializer([N7,num_classes]))
+        'out': tf.Variable(initializer([N3,num_classes]))
     }
 
     biases = {
         'scale1': tf.Variable(initializer([N1])),
-        'beta1' : tf.Variable(initializer([N1])),
+        'b1' : tf.Variable(initializer([N1])),
 
         'scale2': tf.Variable(initializer([N2])),
-        'beta2' : tf.Variable(initializer([N2])),
+        'b2' : tf.Variable(initializer([N2])),
 
         'scale3': tf.Variable(initializer([N3])),
-        'beta3' : tf.Variable(initializer([N3])),
+        'b3' : tf.Variable(initializer([N3])),
 
         'scale4': tf.Variable(initializer([N4])),
         'beta4' : tf.Variable(initializer([N4])),
@@ -219,24 +197,23 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
 
     ################################# Model & Evaluation ###################################
     with tf.name_scope("Logits"):
-        mlp_model = mlp(X,weights,biases,dropout) # Feeds data through model defined above
+        mlp_model = mlp(X,weights,biases,dropout,istraining) # Feeds data through model defined above
         prediction = tf.nn.softmax(mlp_model)     # Constructs a prediction
-        pred_number = tf.argmax(prediction,1)+1   #
+        y_pred = tf.argmax(prediction,1,output_type=tf.int32)  #
 
 
     #################################  Loss and Optimizer ###################################
     with tf.name_scope("Loss"):
-        loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = mlp_model, labels = Y))
-        optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate,beta1 = 0.9 , beta2= 0.999, epsilon=1e-8)
+        loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = mlp_model, labels = y))
+        optimizer = tf.train.AdamOptimizer(learning_rate_ph,beta1 = 0.9 , beta2= 0.999, epsilon=1e-8)
         train_op = optimizer.minimize(loss_op)
         tf.summary.scalar("Validation_Loss",loss_op)
         
         
         
     ################################### Model Evaluation #####################################
-    with tf.name_scope("Model_Eval"):
-        correct_pred = tf.equal(tf.argmax(prediction,1),tf.argmax(Y,1))
-        accuracy = tf.reduce_mean(tf.cast(correct_pred,tf.float32))
+    with tf.name_scope("Model_Eval"):  
+        accuracy = tf.reduce_mean(tf.cast(tf.equal(y_pred, tf.argmax(y,1,output_type=tf.int32)), tf.float32))
         tf.summary.scalar("Accuracy",accuracy)
 
     ## Training ##
@@ -247,27 +224,38 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
     val_acc = []
     train_loss = []
     train_acc = []
-
+    
 
     #writer = tf.summary.FileWriter("C:\Users\cridn_000\Documents\KTH5\Master Thesis\Logs")
-
+    learning_rate = 0.001
+    anneal_lr_freq = 1
+    anneal_lr_rate = 0.98
     ########################################## SESSION ################################33
 
     with tf.Session() as sess:
         t1 = time.time()
         sess.run(init)
         print("Optimization Started")
-        for epoch in range(5):
-            
+        for epoch in range(17):
+            if epoch % anneal_lr_freq == 0:
+                learning_rate *= anneal_lr_rate
+            indices = np.random.permutation(X_train.shape[0])
+            X_train = X_train[indices,:]
+            y_train = y_train[indices,:]
             print("Epoch "+str(epoch))
 
             for i in range(Nbatches):
                 batch_X = X_train[i*batchsize:(i+1)*batchsize,:]
-                batch_y =y_train[i*batchsize:(i+1)*batchsize,:]
-                sess.run(train_op,feed_dict={X: batch_X, Y: batch_y, dropout: 0.6})
-            valloss,valacc = sess.run([loss_op,accuracy],feed_dict={X: X_val, Y: y_val, dropout: 1})
-            trainloss,trainacc = sess.run([loss_op,accuracy],feed_dict={X: X_train, Y: y_train, dropout: 1})
+                batch_y = y_train[i*batchsize:(i+1)*batchsize,:]
+                sess.run(train_op,feed_dict={X: batch_X, y: batch_y, dropout: 0.7, \
+                    learning_rate_ph: learning_rate, istraining: True})
+
+            valloss,valacc = sess.run([loss_op,accuracy], \
+                feed_dict={X: X_val, y: y_val, dropout: 1,istraining: False})
             
+            trainloss,trainacc = sess.run([loss_op,accuracy], \
+                feed_dict={X: X_train, y: y_train, dropout: 1, istraining: False})
+        
             print("Valdiation Loss = " +"{:.4f}".format(valloss) + ", Validation Accuracy = " + "{:.3f}".format(valacc))
             print("Training Loss = " +"{:.4f}".format(trainloss) + ", Training Accuracy = " + "{:.3f}".format(trainacc))
 
@@ -282,11 +270,7 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
 
         print("Optimization Finished")
     
-        predictions = sess.run(pred_number,feed_dict={X: X_val, dropout: 1})
-        #print(predictions)
-        confusion_matrix = sess.run(tf.confusion_matrix(predictions,y_data_confusion))
-        print("Confusion Matrix")
-        print(confusion_matrix)
+       
 
         ####################################################################################
         ########################## FINAL TEST ACCURACY CHECKING ############################
@@ -296,55 +280,68 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
        
         
         
+        ## Running test inference on the different time-series
         print("Starting To Compute The final test accuracy")
-        
+            
         correct_test_prediction = []
-        num_of_test_samples = 500
-        min_num_of_test_samples = 100
+        num_of_test_samples = 300
+        min_num_of_test_samples = 3
         # start looping through each separate time series
-       
-        count_class = np.zeros([ num_classes ])
-        count_meter = np.zeros([ number_of_meters ])
+        
+        count_class = np.zeros([ number_of_classes ])
+        count_meter = np.zeros([ number_of_meters + 1 ])
         test_label = []
         #predictions = np.zeros([number_of_meterseters ]) # stores predictions for each meter
 
         # WANT TO TAKE K SAMPLES FROM EACH METER AND CLASSIFY THEM CORRECTLY (DONT BOTHER ABVOUT CLASS FOR NOW)
 
         ## THERE IS A PROBLEM WITH THIS PART OF THE NETWORK,  WON't WORK
-        for k in range(number_of_meters):
+        for k in range(number_of_meters+1):
             feed_data_test =[]
             test_label = []
+            preds = []
             count=0
-            for i in range(np.shape(test_data_X_time_series)[1]): # Looping through each samples
-                tmp = test_data_meter_time_series[i]      # Temporary Meter Variable
-                tmp_class = test_data_Y_time_series[i]
+            for i in range(np.shape(X_val)[0]): # Looping through each samples
+                tmp = int(test_data_meter[i])      # Temporary Meter Variable
+                tmp_class = int(y_data_confusion[i])
                 # Then we check if we add the test sample to the prediction of some time series
-                if count_meter[int(tmp)-1] < num_of_test_samples and tmp-1 == k:
+                if count_meter[tmp] <= num_of_test_samples and tmp == k:
                     test_label.append(tmp_class)
-                    feed_data_test.append(test_data_X_time_series[:,i])
-                    count_meter[int(tmp)-1] = count_meter[int(tmp)-1] + 1
+                    feed_data_test.append(X_val[i,:])
+                    count_meter[tmp] = count_meter[tmp] + 1
                     count = count+1
+
+
+
             # Make predictions for the slices of meter k
             if count >= min_num_of_test_samples:
-                feed_data_test = np.transpose(np.stack(feed_data_test, axis = -1))
-                pred_k = sess.run(pred_number,feed_dict={X: feed_data_test, dropout: 1})
                 # get return counts for each classes
-                a,return_index,return_counts = np.unique(pred_k, return_index=True, return_counts=True)
+                feed_data_big = np.transpose(np.stack(feed_data_test, axis = -1))
+                batch_size_temp = 1
+                iters_temp      = int(np.floor(feed_data_big.shape[0] / float(batch_size_temp)))
+
+                for t in range(iters_temp):
+                    feed_data_test_batch = feed_data_big[t * batch_size_temp:(t + 1) * batch_size_temp,:]
+                       
+                    pred_temp = sess.run(
+                         y_pred,
+                         feed_dict={X: feed_data_test_batch, dropout: 1,istraining: False}) + 1
+                    
+                    preds.append(pred_temp)
+                
+              #  preds =  sess.run( y_pred,feed_dict={X: feed_data_big, dropout: 1}) + 1
+                a,return_index,return_counts = np.unique(preds, return_index=True, return_counts=True)
                 final_pred = a[np.argmax(return_counts)]
-                if final_pred == test_label[0]:
+                if int(final_pred) == int(test_label[0]):
                     correct_test_prediction.append(1)
                 else:
                     correct_test_prediction.append(0)
         
-
-        #### THIS SHOWS THAT THE NETWORK ACHIEVES OVER 50 % ACCURACY ON THE TESTDATA
-        testloss,testacc = sess.run([loss_op,accuracy],feed_dict={X: np.transpose(test_data_X_time_series), Y: np.transpose(y_one_hot_test_time_series), dropout: 1})
-        print(testloss)
-        print(testacc)
+       
         plt.plot(correct_test_prediction)
-        plt.show(block=True)
-        final_test_accuracy = np.mean(correct_test_prediction)
-        print("Final Accuracy is "+ str(np.round(final_test_accuracy*100,decimals=2))+"%")
+        plt.show()
+        final_test_accuracy = str(100*np.round(np.mean(correct_test_prediction),decimals = 3))+ " %"
+        print("Final Test Accuracy is "+final_test_accuracy)
         t2 = time.time()
         print("Time-Elapsed is " + str((t2-t1)/60) +" minutes.")
 
@@ -352,4 +349,8 @@ for slice_size in [ 12,24 ,30 ,48 ,72]:
     plt.figure(1)
     plt.plot(val_loss,'r')
     plt.plot(train_loss,'g')
-    plt.show(block=True)
+    
+    return 0
+
+for slice_size in [24]:
+      Main_RUN = main(slice_size)

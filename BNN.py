@@ -11,6 +11,7 @@ from six.moves import range, zip
 import numpy as np
 import zhusuan as zs
 import pandas as pd
+import matplotlib.pyplot as plt
 
 def load_data(slice_size):
         # This function loads all of the data that is used for training, takes slice_size as parameter
@@ -38,43 +39,29 @@ def load_data(slice_size):
         shape_test = [np.shape(test_data)[0],Num_Test_Customers]                    # Test data shapes
         df_y_hot_test = pd.read_csv(path_y_hot_test,sep=';',header=None)
         y_one_hot_test = df_y_hot_test.values
-        test_data_X    = test_data[1:np.shape(test_data)[0],:] # Extract time series
-        test_data_Y    = test_data[0,:]                        # Extract Labels
-
+        test_data_X    = test_data[2:np.shape(test_data)[0],:] # Extract time series
+        test_data_Y    = test_data[1,:]                        # Extract Labels
+        test_data_meter = test_data[0,:]
         
 
-        # Test data full time series for final evaluation of sugggested method
-        df_test_time_series = pd.read_csv(path_test_time_series,sep=';',header=None)
-        test_time_series = df_test_time_series.values
-        shape_test_time_series = [np.shape(test_time_series)[0],np.shape(test_time_series)[1]] 
-
-        # Split the final evaluation data into meternumber, label and data
-        test_data_meter_time_series = test_time_series[0,:]
-        test_data_Y_time_series = test_time_series[1,:]
-        test_data_X_time_series = test_time_series[2:shape_test_time_series[0],:]
-        number_of_meters = int(np.max(np.unique(test_data_meter_time_series)))
+        
+        number_of_meters = int(np.max(np.unique(test_data_meter)) ) # METER NUMBER RANGE
         print(" There are " +str(number_of_meters) + " unique meters in the test dataset.")
 
-        y_one_hot_test_time_series = np.zeros([number_of_classes,np.shape(test_time_series)[1]])
-        for k in range(np.shape(test_time_series)[1]):
-            for p in range(number_of_classes):
-                if p+1 == test_data_Y_time_series[k]:
-                    y_one_hot_test_time_series[p,k] = 1
-        shape_test_time_series = [np.shape(test_time_series)[0],np.shape(test_time_series)[1]]   
+     
 
-
-        y_data = data[0,:]
-        X_data  = np.asarray(data[1:np.shape(data)[0],:])
+        y_data = data[1,:]
+        X_data  = np.asarray(data[2:np.shape(data)[0],:])
 
         print( np.any(np.isnan(data)))
-        X_train =  np.transpose(X_data[:,:])
+        x_train =  np.transpose(X_data[:,:])
         y_train = y_data
-        X_val   = np.transpose(test_data_X[:,:])
+        x_val   = np.transpose(test_data_X[:,:])
         y_val   = test_data_Y
         y_data_confusion = test_data_Y
 
-        return y_train, X_train, X_val, y_val, y_data_confusion, test_data_X_time_series,test_data_Y_time_series, \
-            number_of_classes,test_data_meter_time_series,number_of_meters,y_one_hot_test_time_series
+        return y_train, x_train, x_val, y_val, y_data_confusion,test_data_meter, \
+            number_of_classes,number_of_meters
 
     ############ LOADING DATA ##################################
     
@@ -96,6 +83,7 @@ def var_dropout(observed, x, n, net_size, n_particles, is_training):
             if i < len(net_size) - 2:
                 h = tf.nn.relu(h)
         y = zs.Categorical('y', h)
+        print(i)
     return model, h
 
 
@@ -118,25 +106,23 @@ if __name__ == '__main__':
     tf.set_random_seed(1234)
     np.random.seed(1234)
 
-    # Load MNIST
-    #mnist = tf.keras.datasets.mnist
-    #(x_train, y_train),(x_test, y_test) = mnist.load_data()
-    #x_train, x_test = x_train / 255.0, x_test / 255.0
-    
     
     slice_size = 24
     n_x = slice_size
-    y_train, x_train, x_test, y_test, y_data_confusion, test_data_X_time_series,test_data_Y_time_series, number_of_classes,test_data_meter_time_series,number_of_meters,y_one_hot_test_time_series = \
+    y_train, x_train, x_test, y_test, y_data_confusion,test_data_meter, \
+            number_of_classes,number_of_meters = \
         load_data(slice_size)
     
     y_train = y_train.astype(int)
     y_test = y_test.astype(int)
     # Define training/evaluation parameters
-    epochs = 50
-    batch_size = 100
+    epochs = 5
+    batch_size = 50
+    batch_size_test = 50
     lb_samples = 10
     ll_samples = 100
     iters = int(np.floor(x_train.shape[0] / float(batch_size)))
+    iters_test = int(np.floor(x_test.shape[0] / float(batch_size_test)))
     test_freq = 5
     learning_rate = 0.001
     anneal_lr_freq = 100
@@ -171,12 +157,19 @@ if __name__ == '__main__':
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
 
-    _, h_pred = var_dropout(dict(zip(e_names, qe_samples)),
+    
+
+    model, h_pred = var_dropout(dict(zip(e_names, qe_samples)),
                             x_obs, n, net_size,
                             n_particles, is_training)
     h_pred = tf.reduce_mean(tf.nn.softmax(h_pred), 0)
     y_pred = tf.argmax(h_pred, 1, output_type=tf.int32)
     acc = tf.reduce_mean(tf.cast(tf.equal(y_pred, y), tf.float32))
+
+    log_py_xw = model.local_log_prob('y')
+    log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0)) 
+        
+
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=())
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
@@ -216,18 +209,87 @@ if __name__ == '__main__':
                 time_test = -time.time()
                 test_lbs = []
                 test_accs = []
-                for t in range(10):
-                    x_batch = x_test[t * 100:(t + 1) * 100,:]
-                    y_batch = y_test[t * 100:(t + 1) * 100]
-                    lb, acc1 = sess.run(
-                        [lower_bound, acc],
+                test_ll = []
+                for t in range(iters_test):
+                    x_batch = x_test[t * batch_size_test:(t + 1) * batch_size_test,:]
+                    y_batch = y_test[t * batch_size_test:(t + 1) * batch_size_test]
+                    lb, acc1,ll = sess.run(
+                        [lower_bound, acc,log_likelihood],
                         feed_dict={n_particles: ll_samples,
                                    is_training: False,
                                    x: x_batch, y: y_batch})
                     test_lbs.append(lb)
                     test_accs.append(acc1)
+                    test_ll.append(ll)
+
                 time_test += time.time()
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
-                print('>> Test accuaracy = {}'.format(np.mean(test_accs)))
+                print('>> Test accuracy = {},  log(p(y|x,W)) = {} '.format(np.mean(test_accs), np.mean(test_ll)))
+
+        ## Running test inference on the different time-series
+        print("Starting To Compute The final test accuracy")
+            
+        correct_test_prediction = []
+        num_of_test_samples = 300
+        min_num_of_test_samples = 60
+        # start looping through each separate time series
+        
+        count_class = np.zeros([ number_of_classes ])
+        count_meter = np.zeros([ number_of_meters + 1 ])
+        test_label = []
+        #predictions = np.zeros([number_of_meterseters ]) # stores predictions for each meter
+
+        # WANT TO TAKE K SAMPLES FROM EACH METER AND CLASSIFY THEM CORRECTLY (DONT BOTHER ABVOUT CLASS FOR NOW)
+
+        ## THERE IS A PROBLEM WITH THIS PART OF THE NETWORK,  WON't WORK
+        for k in range(number_of_meters+1):
+            feed_data_test =[]
+            test_label = []
+            preds = []
+            count=0
+            for i in range(np.shape(x_test)[0]): # Looping through each samples
+                tmp = int(test_data_meter[i])      # Temporary Meter Variable
+                tmp_class = y_test[i]
+                # Then we check if we add the test sample to the prediction of some time series
+                if count_meter[int(tmp)] <= num_of_test_samples and tmp == k:
+                    test_label.append(tmp_class)
+                    feed_data_test.append(x_test[i,:])
+                    count_meter[int(tmp)] = count_meter[int(tmp)] + 1
+                    count = count+1
+
+
+
+            # Make predictions for the slices of meter k
+            if count >= min_num_of_test_samples:
+                # get return counts for each classes
+                feed_data_big = np.transpose(np.stack(feed_data_test, axis = -1))
+                batch_size_temp = 1
+                iters_temp      = int(np.floor(feed_data_big.shape[0] / float(batch_size_temp)))
+
+                for t in range(iters_temp):
+                    feed_data_test_batch = feed_data_big[t * batch_size_temp:(t + 1) * batch_size_temp,:]
+                       
+                    pred_temp = sess.run(
+                        [y_pred],
+                        feed_dict={n_particles: ll_samples,
+                                is_training: False,
+                                x: feed_data_test_batch})
+                    
+                    preds.append(pred_temp)
+                
+
+                a,return_index,return_counts = np.unique(preds, return_index=True, return_counts=True)
+                final_pred = a[np.argmax(return_counts)]
+                if int(final_pred) == int(test_label[0]):
+                    correct_test_prediction.append(1)
+                else:
+                    correct_test_prediction.append(0)
+        
+       
+        plt.plot(correct_test_prediction)
+        plt.show()
+        final_test_accuracy = str(100*np.round(np.mean(correct_test_prediction),decimals = 3))+ " %"
+        print("Final Test Accuracy is "+final_test_accuracy)
+
         print("DONE!")
