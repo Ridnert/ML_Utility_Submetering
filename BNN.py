@@ -74,21 +74,25 @@ def var_dropout(observed, x, n, net_size, n_particles, is_training):
                              'updates_collections': None}
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
             eps_mean = tf.ones([n, n_in])
+            # Adding noise to Weights
             eps = zs.Normal(
                 'layer' + str(i) + '/eps', eps_mean, std=1.,
                 n_samples=n_particles, group_ndims=1)
+
             h = layers.fully_connected(
                 h * eps, n_out, normalizer_fn=layers.batch_norm,
                 normalizer_params=normalizer_params)
             if i < len(net_size) - 2:
                 h = tf.nn.relu(h)
         y = zs.Categorical('y', h)
-        print(i)
+       # print(i)
     return model, h
 
 
 @zs.reuse('variational')
 def q(observed, n, net_size, n_particles):
+    # Build the variational posterior distribution.
+    # We assume it is factorized
     with zs.BayesianNet(observed=observed) as variational:
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
             with tf.variable_scope('layer' + str(i)):
@@ -101,6 +105,13 @@ def q(observed, n, net_size, n_particles):
                             n_samples=n_particles, group_ndims=1)
     return variational
 
+def log_joint(observed):
+    # Defines the log joint likelihood of model and variational objectives.
+    model, _ = var_dropout(observed, x_obs, n, net_size,
+                            n_particles, is_training)
+    log_pW = model.local_log_prob(W_names)
+    log_py_xW = model.local_log_prob('y')
+    return tf.add_n(log_pW) / x_train.shape[0] + log_py_xW
 
 if __name__ == '__main__':
     tf.set_random_seed(1234)
@@ -116,11 +127,11 @@ if __name__ == '__main__':
     y_train = y_train.astype(int)
     y_test = y_test.astype(int)
     # Define training/evaluation parameters
-    epochs = 5
-    batch_size = 50
-    batch_size_test = 50
-    lb_samples = 10
-    ll_samples = 100
+    epochs = 40
+    batch_size = 20
+    batch_size_test = 20
+    lb_samples = 30
+    ll_samples = 500
     iters = int(np.floor(x_train.shape[0] / float(batch_size)))
     iters_test = int(np.floor(x_test.shape[0] / float(batch_size_test)))
     test_freq = 5
@@ -134,32 +145,32 @@ if __name__ == '__main__':
     x = tf.placeholder(tf.float32, shape=(None, n_x))
     y = tf.placeholder(tf.int32, shape=(None))
     n = tf.shape(x)[0]
+    learning_rate_ph = tf.placeholder(tf.float32, shape=())
+
 
     net_size = [n_x, 100, 100, 100, 10]
-    e_names = ['layer' + str(i) + '/eps' for i in range(len(net_size) - 1)]
+    W_names = ['layer' + str(i) + '/eps' for i in range(len(net_size) - 1)]
 
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
 
-    def log_joint(observed):
-        model, _ = var_dropout(observed, x_obs, n, net_size,
-                               n_particles, is_training)
-        log_pe = model.local_log_prob(e_names)
-        log_py_xe = model.local_log_prob('y')
-        return tf.add_n(log_pe) / x_train.shape[0] + log_py_xe
+
 
     variational = q({}, n, net_size, n_particles)
-    qe_queries = variational.query(e_names, outputs=True, local_log_prob=True)
-    qe_samples, log_qes = zip(*qe_queries)
-    log_qes = [log_qe / x_train.shape[0] for log_qe in log_qes]
-    e_dict = dict(zip(e_names, zip(qe_samples, log_qes)))
-    lower_bound = zs.variational.elbo(log_joint, {'y': y_obs}, e_dict, axis=0)
+    # Get samples and log probabilities from the variational posterior
+    # Query stochastic nodes in W_names about output and local log probabilities.
+    qW_queries = variational.query(W_names, outputs=True, local_log_prob=True)
+    qW_samples, log_qWs = zip(*qW_queries)
+    log_qWs = [log_qW / x_train.shape[0] for log_qW in log_qWs]
+    W_dict = dict(zip(W_names, zip(qW_samples, log_qWs)))
+    # wdict of the form {'W_names': [qW_samples, log_qWs] } input to the ELBO
+    lower_bound = zs.variational.elbo(log_joint, {'y': y_obs}, W_dict, axis=0)
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
 
     
-
-    model, h_pred = var_dropout(dict(zip(e_names, qe_samples)),
+    # Predictions
+    model, h_pred = var_dropout(dict(zip(W_names, qW_samples)),
                             x_obs, n, net_size,
                             n_particles, is_training)
     h_pred = tf.reduce_mean(tf.nn.softmax(h_pred), 0)
@@ -171,7 +182,7 @@ if __name__ == '__main__':
         
 
 
-    learning_rate_ph = tf.placeholder(tf.float32, shape=())
+    
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     infer = optimizer.minimize(cost)
 
@@ -225,14 +236,14 @@ if __name__ == '__main__':
                 time_test += time.time()
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
-                print('>> Test accuracy = {},  log(p(y|x,W)) = {} '.format(np.mean(test_accs), np.mean(test_ll)))
+                print('>> Test accuracy = {},  log(p(y|x,W)) = {} '.format(np.mean(test_accs), (np.mean(test_ll))))
 
         ## Running test inference on the different time-series
         print("Starting To Compute The final test accuracy")
             
         correct_test_prediction = []
-        num_of_test_samples = 300
-        min_num_of_test_samples = 60
+        num_of_test_samples = 30
+        min_num_of_test_samples = 10
         # start looping through each separate time series
         
         count_class = np.zeros([ number_of_classes ])
@@ -288,7 +299,7 @@ if __name__ == '__main__':
         
        
         plt.plot(correct_test_prediction)
-        plt.show()
+        plt.show(block = False)
         final_test_accuracy = str(100*np.round(np.mean(correct_test_prediction),decimals = 3))+ " %"
         print("Final Test Accuracy is "+final_test_accuracy)
 

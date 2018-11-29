@@ -139,11 +139,11 @@ def main(time_points):
 
     plt.hist(boolvec)
     plt.title("Histogram of number of NaN's per slice with the maximum nuber of zeros equal to "+str(int(time_points*zeros_slice_percentage)))
-    plt.show()
+    plt.show(block = False)
     left_out_slice = np.stack(left_out_slice,axis=-1)
     plt.plot(number_of_chunks_per_customer)
     plt.title("Distribution of Number of Chunks on Customers/Meters")
-    plt.show()
+    plt.show(block = False)
 
                                         
                                         
@@ -229,7 +229,7 @@ def main(time_points):
                                         
     plt.hist(count_meter)
     plt.title("Distribution of number of samples per meter in the training set")
-    plt.show()
+    plt.show(block = False)
                                         
     # To keep rest of code running we remove first row so we are left with data containg the label and the data.
     X_big      = np.zeros([np.shape(X_big_tmp)[0],np.shape(X_big_tmp)[1]])
@@ -377,5 +377,5 @@ def main(time_points):
 
 
 
-for time_points in [24]:   
+for time_points in [24,32,48,72,100]:   
     main(time_points)

@@ -66,7 +66,8 @@ def load_data(slice_size):
     return y_train, x_train, x_val, y_val, y_data_confusion,test_data_meter, \
         number_of_classes,number_of_meters
 
-def main(slice_size):
+def main(slice_size,l):
+
     print("Slice_Size: ", str(slice_size))
     ############ LOADING DATA ##################################
     y_train, X_train, X_val, y_val, y_data_confusion,test_data_meter, \
@@ -85,10 +86,7 @@ def main(slice_size):
     N1 = 800
     N2 = 800
     N3 = 800
-    N4 = 800
-    N5 = 800
-    N6 = 800
-    N7 = 800
+    
 
     num_samples = np.shape(X_train)[0]
     input_size  = np.shape(X_train)[1]
@@ -116,7 +114,9 @@ def main(slice_size):
     def mlp(X, weights, biases,dropout,istraining):
         with tf.name_scope("Layer_1"):
             #Layer One
-            fc1 = tf.nn.bias_add(tf.matmul(X,weights['wh1']),biases['b1'])
+           # fc1 = tf.nn.bias_add(tf.matmul(X,weights['wh1']),biases['b1'])
+            fc1 = tf.matmul(X,weights['wh1'])
+            fc1 = tf.layers.batch_normalization(fc1,training = istraining)
            # batch_mean1,batch_variance1 = tf.nn.moments(fc1,[0])
            # fc1 = tf.nn.batch_normalization(fc1,batch_mean1,batch_variance1,biases['beta1'],biases['scale1'],epsilon) 
             #fc1 = tf.contrib.layers.batch_norm(fc1,is_training=istraining)
@@ -125,20 +125,22 @@ def main(slice_size):
             fc1 = tf.nn.dropout(fc1,dropout)
         with tf.name_scope("Layer_2"):
             # Layer Two
-            fc2 = tf.nn.bias_add(tf.matmul(fc1,weights['wh2']),biases['b2'])
+            #fc2 = tf.nn.bias_add(tf.matmul(fc1,weights['wh2']),biases['b2'])
+            fc2 = tf.matmul(fc1,weights['wh2'])
            # batch_mean2,batch_variance2 = tf.nn.moments(fc2,[0])
             #fc2 = tf.nn.batch_normalization(fc2,batch_mean2,batch_variance2,biases['beta2'],biases['scale2'],epsilon) 
             #fc2 = tf.contrib.layers.batch_norm(fc2,is_training=istraining)
-            #fc2 = tf.layers.batch_normalization(fc2, training=istraining)
+            fc2 = tf.layers.batch_normalization(fc2, training=istraining)
             fc2 = tf.nn.relu(fc2)
             fc2 = tf.nn.dropout(fc2,dropout)
         with tf.name_scope("Layer_3"):
             # Layer Three
-            fc3 = tf.nn.bias_add(tf.matmul(fc2,weights['wh3']),biases['b3'])
+          #  fc3 = tf.nn.bias_add(tf.matmul(fc2,weights['wh3']),biases['b3'])
+            fc3 = tf.matmul(fc2,weights['wh3'])
           #  batch_mean3,batch_variance3 = tf.nn.moments(fc3,[0])
            # fc3 = tf.nn.batch_normalization(fc3,batch_mean3,batch_variance3,biases['beta3'],biases['scale3'],epsilon) 
            # fc3 = tf.contrib.layers.batch_norm(fc3,is_training=istraining)
-            #fc3 = tf.layers.batch_normalization(fc3, training=istraining)
+            fc3 = tf.layers.batch_normalization(fc3, training=istraining)
             fc3 = tf.nn.relu(fc3)
             fc3 = tf.nn.dropout(fc3,dropout)
      
@@ -158,14 +160,7 @@ def main(slice_size):
         'wh2': tf.Variable(initializer([N1,N2])),
         # Third hidden layer
         'wh3': tf.Variable(initializer([N2,N3])),
-        # Fourth Hidden Layer
-        'wh4': tf.Variable(initializer([N3,N4])),
-        # Fifth Hidden Layer
-        'wh5': tf.Variable(initializer([N4,N5])),
-        # Sixth Hidden Layer
-        'wh6': tf.Variable(initializer([N5,N6])),
-        # Seventh Hidden Layer
-        'wh7': tf.Variable(initializer([N6,N7])),
+       
         # Output layer
         'out': tf.Variable(initializer([N3,num_classes]))
     }
@@ -179,24 +174,13 @@ def main(slice_size):
 
         'scale3': tf.Variable(initializer([N3])),
         'b3' : tf.Variable(initializer([N3])),
-
-        'scale4': tf.Variable(initializer([N4])),
-        'beta4' : tf.Variable(initializer([N4])),
-
-        'scale5': tf.Variable(initializer([N5])),
-        'beta5' : tf.Variable(initializer([N5])),
-
-        'scale6': tf.Variable(initializer([N6])),
-        'beta6' : tf.Variable(initializer([N6])),
-        
-        'scale7': tf.Variable(initializer([N7])),
-        'beta7':  tf.Variable(initializer([N7])),
         'biout': tf.Variable(initializer([num_classes]))
     }
 
 
     ################################# Model & Evaluation ###################################
     with tf.name_scope("Logits"):
+        
         mlp_model = mlp(X,weights,biases,dropout,istraining) # Feeds data through model defined above
         prediction = tf.nn.softmax(mlp_model)     # Constructs a prediction
         y_pred = tf.argmax(prediction,1,output_type=tf.int32)  #
@@ -204,9 +188,12 @@ def main(slice_size):
 
     #################################  Loss and Optimizer ###################################
     with tf.name_scope("Loss"):
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)                            
+        
         loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = mlp_model, labels = y))
-        optimizer = tf.train.AdamOptimizer(learning_rate_ph,beta1 = 0.9 , beta2= 0.999, epsilon=1e-8)
-        train_op = optimizer.minimize(loss_op)
+        with tf.control_dependencies(update_ops): 
+            optimizer = tf.train.AdamOptimizer(learning_rate_ph,beta1 = 0.9 , beta2= 0.999, epsilon=1e-8)
+            train_op = optimizer.minimize(loss_op)
         tf.summary.scalar("Validation_Loss",loss_op)
         
         
@@ -236,7 +223,7 @@ def main(slice_size):
         t1 = time.time()
         sess.run(init)
         print("Optimization Started")
-        for epoch in range(17):
+        for epoch in range(1):
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
             indices = np.random.permutation(X_train.shape[0])
@@ -263,9 +250,7 @@ def main(slice_size):
             val_acc.append(valacc)
             train_loss.append(trainloss)
             train_acc.append(trainacc)
-            # Tensorboard logging
-            #validation_log = sess.run(merged,feed_dict={X: X_val, Y: y_val})
-            #writer_scalar.add_summary(validation_log,epoch)
+           
 
 
         print("Optimization Finished")
@@ -338,19 +323,26 @@ def main(slice_size):
                     correct_test_prediction.append(0)
         
        
-        plt.plot(correct_test_prediction)
-        plt.show()
+        
+        
         final_test_accuracy = str(100*np.round(np.mean(correct_test_prediction),decimals = 3))+ " %"
         print("Final Test Accuracy is "+final_test_accuracy)
         t2 = time.time()
         print("Time-Elapsed is " + str((t2-t1)/60) +" minutes.")
-
-    #writer.add_graph(sess.graph) 
-    plt.figure(1)
+    plt.figure(l)
+    plt.plot(correct_test_prediction)
     plt.plot(val_loss,'r')
     plt.plot(train_loss,'g')
-    
+    plt.show(block=False)
+    tf.reset_default_graph()
     return 0
 
-for slice_size in [24]:
-      Main_RUN = main(slice_size)
+l=1 # For plotting
+for slice_size in [24,32,48,72,100]:
+    filename = "D:\Master_Thesis_Results\Result"
+    if os.path.exists(filename + ".csv"):
+        print("Removing old "+ filename + ".csv"+ " before writing new.")
+        os.remove(filename_left_out_slice + ".csv")
+    
+    Main_RUN = main(slice_size,l)
+    l += 2
