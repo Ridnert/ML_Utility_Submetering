@@ -39,7 +39,9 @@ def main(time_points):
     random.seed(2018)
     print("Number of time_Points is " + str(time_points))
     number_of_training_slices = 200
+    min_number_of_training_slices = 1
     number_of_test_slices     = 200
+    min_number_of_test_slices  = 50
     zeros_slice_percentage = 0.3
 
 
@@ -137,13 +139,13 @@ def main(time_points):
         number_of_chunks_per_customer.append(count)
 
 
-    plt.hist(boolvec)
-    plt.title("Histogram of number of NaN's per slice with the maximum nuber of zeros equal to "+str(int(time_points*zeros_slice_percentage)))
-    plt.show(block = False)
-    left_out_slice = np.stack(left_out_slice,axis=-1)
-    plt.plot(number_of_chunks_per_customer)
-    plt.title("Distribution of Number of Chunks on Customers/Meters")
-    plt.show(block = False)
+    #plt.hist(boolvec)
+    #plt.title("Histogram of number of NaN's per slice with the maximum nuber of zeros equal to "+str(int(time_points*zeros_slice_percentage)))
+    #plt.show()
+    #left_out_slice = np.stack(left_out_slice,axis=-1)
+    #plt.plot(number_of_chunks_per_customer)
+   # plt.title("Distribution of Number of Chunks on Customers/Meters")
+   # plt.show()
 
                                         
                                         
@@ -210,34 +212,56 @@ def main(time_points):
             X_resampled.append(X_big[:,i])
 
             count_meter[index] = count_meter[index] + 1 # Keeps track of number of samples extracted from each meter
+            
+    
 
-            # DO THE SAME BUT FOR TEST SET
     for i in range(np.shape(X_big_test)[1]):
         
         index = int(X_big_test[0,i])
         
         if count_meter_test[index] < number_of_test_slices:
-            X_resampled_test.append(X_big_test[:,i])
-            count_meter_test[index] = count_meter_test[index] + 1
+           X_resampled_test.append(X_big_test[:,i])
+           count_meter_test[index] = count_meter_test[index] + 1
+           
 
+    gurk1 = np.asarray(np.where(count_meter < min_number_of_training_slices))
+    #indgurk1 = count_meter[gurk1]
+    gurk2 = np.asarray(np.where(count_meter_test < min_number_of_test_slices))
+    rem = np.where(count_meter_test >= min_number_of_test_slices)
+    indgurk2 = count_meter_test[rem]
+   
     del(X_big)
     del(X_big_test)                                       
     X_big_tmp      = np.stack(X_resampled,      axis=-1)      
     X_big_test_tmp = np.stack(X_resampled_test, axis=-1)
+    del_indices = []
+    for i in range(np.shape(X_big_tmp)[1]):
+        for p in range(np.shape(gurk1)[1]):
+            if X_big_tmp[0,i] == gurk1[0][p]:
+                del_indices.append(i)
+    X_big = np.delete(X_big_tmp, del_indices, 1)
 
 
+    del_indices = []
+    for i in range(np.shape(X_big_test_tmp)[1]):
+        for p in range(np.shape(gurk2)[1]):
+            if X_big_test_tmp[0,i] == gurk2[0][p]:
+                print(gurk2[0][p])
+                del_indices.append(i)
+
+    X_big_test = np.delete(X_big_test_tmp, del_indices, 1)
                                         
-    plt.hist(count_meter)
-    plt.title("Distribution of number of samples per meter in the training set")
-    plt.show(block = False)
+    plt.hist(rem)
+    plt.title("Distribution of number of samples per meter in the test set")
+    plt.show()
                                         
     # To keep rest of code running we remove first row so we are left with data containg the label and the data.
-    X_big      = np.zeros([np.shape(X_big_tmp)[0],np.shape(X_big_tmp)[1]])
-    X_big_test = np.zeros([np.shape(X_big_test_tmp)[0],np.shape(X_big_test_tmp)[1]])
+    #X_big      = np.zeros([np.shape(X_big_tmp)[0],np.shape(X_big_tmp)[1]])
+    #X_big_test = np.zeros([np.shape(X_big_test_tmp)[0],np.shape(X_big_test_tmp)[1]])
 
 
-    X_big[:,:]      = X_big_tmp[:,:]
-    X_big_test[:,:] = X_big_test_tmp[:,:]                                  
+    #X_big[:,:]      = X_big_tmp[:,:]
+    #X_big_test[:,:] = X_big_test_tmp[:,:]                                  
     del(X_big_tmp)
     del(X_big_test_tmp)
     print(np.shape(X_big))
@@ -377,5 +401,5 @@ def main(time_points):
 
 
 
-for time_points in [24,32,48,72,100]:   
+for time_points in [24]:   
     main(time_points)

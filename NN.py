@@ -83,9 +83,9 @@ def main(slice_size,l):
     batchsize = 50
 
     # Number of hidden nodes in the network
-    N1 = 800
-    N2 = 800
-    N3 = 800
+    N1 = 100
+    N2 = 100
+    N3 = 100
     
 
     num_samples = np.shape(X_train)[0]
@@ -223,7 +223,7 @@ def main(slice_size,l):
         t1 = time.time()
         sess.run(init)
         print("Optimization Started")
-        for epoch in range(1):
+        for epoch in range(15):
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
             indices = np.random.permutation(X_train.shape[0])
@@ -267,78 +267,89 @@ def main(slice_size,l):
         
         ## Running test inference on the different time-series
         print("Starting To Compute The final test accuracy")
+        print("Doing this for a varied number of minimal samples")
+        fin_acc = []
+        for min_num_of_test_samples in range(1, 50, 10):
             
-        correct_test_prediction = []
-        num_of_test_samples = 300
-        min_num_of_test_samples = 3
-        # start looping through each separate time series
-        
-        count_class = np.zeros([ number_of_classes ])
-        count_meter = np.zeros([ number_of_meters + 1 ])
-        test_label = []
-        #predictions = np.zeros([number_of_meterseters ]) # stores predictions for each meter
-
-        # WANT TO TAKE K SAMPLES FROM EACH METER AND CLASSIFY THEM CORRECTLY (DONT BOTHER ABVOUT CLASS FOR NOW)
-
-        ## THERE IS A PROBLEM WITH THIS PART OF THE NETWORK,  WON't WORK
-        for k in range(number_of_meters+1):
-            feed_data_test =[]
+            correct_test_prediction = []
+            num_of_test_samples = 300
+            #min_num_of_test_samples = 5
+            # start looping through each separate time series
+            
+            count_class = np.zeros([ number_of_classes ])
+            count_meter = np.zeros([ number_of_meters + 1 ])
             test_label = []
-            preds = []
-            count=0
-            for i in range(np.shape(X_val)[0]): # Looping through each samples
-                tmp = int(test_data_meter[i])      # Temporary Meter Variable
-                tmp_class = int(y_data_confusion[i])
-                # Then we check if we add the test sample to the prediction of some time series
-                if count_meter[tmp] <= num_of_test_samples and tmp == k:
-                    test_label.append(tmp_class)
-                    feed_data_test.append(X_val[i,:])
-                    count_meter[tmp] = count_meter[tmp] + 1
-                    count = count+1
+            #predictions = np.zeros([number_of_meterseters ]) # stores predictions for each meter
 
+            # WANT TO TAKE K SAMPLES FROM EACH METER AND CLASSIFY THEM CORRECTLY (DONT BOTHER ABVOUT CLASS FOR NOW)
 
+            ## THERE IS A PROBLEM WITH THIS PART OF THE NETWORK,  WON't WORK
+            for k in range(number_of_meters+1):
+                feed_data_test =[]
+                test_label = []
+                preds = []
+                count=0
+                for i in range(np.shape(X_val)[0]): # Looping through each samples
+                    tmp = int(test_data_meter[i])      # Temporary Meter Variable
+                    tmp_class = int(y_data_confusion[i])
+                    # Then we check if we add the test sample to the prediction of some time series
+                    if count_meter[tmp] <= num_of_test_samples and tmp == k:
+                        test_label.append(tmp_class)
+                        feed_data_test.append(X_val[i,:])
+                        count_meter[tmp] = count_meter[tmp] + 1
+                        count = count+1
 
-            # Make predictions for the slices of meter k
-            if count >= min_num_of_test_samples:
-                # get return counts for each classes
-                feed_data_big = np.transpose(np.stack(feed_data_test, axis = -1))
-                batch_size_temp = 1
-                iters_temp      = int(np.floor(feed_data_big.shape[0] / float(batch_size_temp)))
+                #print(count)
 
-                for t in range(iters_temp):
-                    feed_data_test_batch = feed_data_big[t * batch_size_temp:(t + 1) * batch_size_temp,:]
-                       
-                    pred_temp = sess.run(
-                         y_pred,
-                         feed_dict={X: feed_data_test_batch, dropout: 1,istraining: False}) + 1
+                # Make predictions for the slices of meter k
+                if count >= min_num_of_test_samples:
+                    # get return counts for each classes
+                    feed_data_big = np.transpose(np.stack(feed_data_test, axis = -1))
+                    batch_size_temp = 1
+                    iters_temp      = int(np.floor(feed_data_big.shape[0] / float(batch_size_temp)))
+
+                    for t in range(iters_temp):
+                        feed_data_test_batch = feed_data_big[t * batch_size_temp:(t + 1) * batch_size_temp,:]
+                        
+                        pred_temp = sess.run(
+                            y_pred,
+                            feed_dict={X: feed_data_test_batch, dropout: 1,istraining: False}) + 1
+                        
+                        preds.append(pred_temp)
                     
-                    preds.append(pred_temp)
-                
-              #  preds =  sess.run( y_pred,feed_dict={X: feed_data_big, dropout: 1}) + 1
-                a,return_index,return_counts = np.unique(preds, return_index=True, return_counts=True)
-                final_pred = a[np.argmax(return_counts)]
-                if int(final_pred) == int(test_label[0]):
-                    correct_test_prediction.append(1)
-                else:
-                    correct_test_prediction.append(0)
+                #  preds =  sess.run( y_pred,feed_dict={X: feed_data_big, dropout: 1}) + 1
+                    a,return_index,return_counts = np.unique(preds, return_index=True, return_counts=True)
+                    final_pred = a[np.argmax(return_counts)]
+                    if int(final_pred) == int(test_label[0]):
+                        correct_test_prediction.append(1)
+                    else:
+                        correct_test_prediction.append(0)
+            
         
-       
-        
-        
-        final_test_accuracy = str(100*np.round(np.mean(correct_test_prediction),decimals = 3))+ " %"
-        print("Final Test Accuracy is "+final_test_accuracy)
-        t2 = time.time()
-        print("Time-Elapsed is " + str((t2-t1)/60) +" minutes.")
-    plt.figure(l)
-    plt.plot(correct_test_prediction)
+            
+            
+            final_test_accuracy = 100*np.round(np.mean(correct_test_prediction),decimals = 3)
+            print("Final Test Accuracy is "+str(final_test_accuracy) + "Number of Meters Used in evaluation is "+ str(len(correct_test_prediction)))
+            t2 = time.time()
+            print("Time-Elapsed is " + str((t2-t1)/60) +" minutes.")
+            fin_acc.append(final_test_accuracy)
+    filename = "D:\Master_Thesis_Results\Result"
+    if os.path.exists(filename + ".csv"):
+        print("Removing old "+ filename + ".csv"+ " before writing new.")
+        os.remove(filename_left_out_slice + ".csv")
+    plt.figure(1)
+    plt.plot(np.arange(1,50,10),fin_acc)
+    plt.show()
+    plt.figure(2)
     plt.plot(val_loss,'r')
     plt.plot(train_loss,'g')
-    plt.show(block=False)
+    plt.show()
     tf.reset_default_graph()
+
     return 0
 
 l=1 # For plotting
-for slice_size in [24,32,48,72,100]:
+for slice_size in [24]:
     filename = "D:\Master_Thesis_Results\Result"
     if os.path.exists(filename + ".csv"):
         print("Removing old "+ filename + ".csv"+ " before writing new.")

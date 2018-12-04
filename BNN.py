@@ -73,7 +73,7 @@ def var_dropout(observed, x, n, net_size, n_particles, is_training):
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
-            eps_mean = tf.ones([n, n_in])
+            eps_mean = tf.zeros([n, n_in])
             # Adding noise to Weights
             eps = zs.Normal(
                 'layer' + str(i) + '/eps', eps_mean, std=1.,
@@ -97,13 +97,14 @@ def q(observed, n, net_size, n_particles):
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
             with tf.variable_scope('layer' + str(i)):
                 logit_alpha = tf.get_variable('logit_alpha', [n_in])
-
+            
             alpha = tf.nn.sigmoid(logit_alpha)
             alpha = tf.tile(tf.expand_dims(alpha, 0), [n, 1])
             eps = zs.Normal('layer' + str(i) + '/eps',
                             1., logstd=0.5 * tf.log(alpha + 1e-10),
                             n_samples=n_particles, group_ndims=1)
     return variational
+
 
 def log_joint(observed):
     # Defines the log joint likelihood of model and variational objectives.
@@ -113,12 +114,15 @@ def log_joint(observed):
     log_py_xW = model.local_log_prob('y')
     return tf.add_n(log_pW) / x_train.shape[0] + log_py_xW
 
+
+
 if __name__ == '__main__':
     tf.set_random_seed(1234)
     np.random.seed(1234)
 
     
     slice_size = 24
+
     n_x = slice_size
     y_train, x_train, x_test, y_test, y_data_confusion,test_data_meter, \
             number_of_classes,number_of_meters = \
@@ -127,7 +131,7 @@ if __name__ == '__main__':
     y_train = y_train.astype(int)
     y_test = y_test.astype(int)
     # Define training/evaluation parameters
-    epochs = 40
+    epochs = 10
     batch_size = 20
     batch_size_test = 20
     lb_samples = 30
@@ -148,6 +152,7 @@ if __name__ == '__main__':
     learning_rate_ph = tf.placeholder(tf.float32, shape=())
 
 
+
     net_size = [n_x, 100, 100, 100, 10]
     W_names = ['layer' + str(i) + '/eps' for i in range(len(net_size) - 1)]
 
@@ -156,7 +161,7 @@ if __name__ == '__main__':
 
 
 
-    variational = q({}, n, net_size, n_particles)
+    variational = q({},n, net_size, n_particles)
     # Get samples and log probabilities from the variational posterior
     # Query stochastic nodes in W_names about output and local log probabilities.
     qW_queries = variational.query(W_names, outputs=True, local_log_prob=True)
@@ -240,67 +245,75 @@ if __name__ == '__main__':
 
         ## Running test inference on the different time-series
         print("Starting To Compute The final test accuracy")
+        fin_acc = []
+        num_met =[]
+        for min_num_of_test_samples in range(1, 200, 10):    
+            correct_test_prediction = []
+            num_of_test_samples = 300
+            #min_num_of_test_samples = 5
+            # start looping through each separate time series
             
-        correct_test_prediction = []
-        num_of_test_samples = 30
-        min_num_of_test_samples = 10
-        # start looping through each separate time series
-        
-        count_class = np.zeros([ number_of_classes ])
-        count_meter = np.zeros([ number_of_meters + 1 ])
-        test_label = []
-        #predictions = np.zeros([number_of_meterseters ]) # stores predictions for each meter
-
-        # WANT TO TAKE K SAMPLES FROM EACH METER AND CLASSIFY THEM CORRECTLY (DONT BOTHER ABVOUT CLASS FOR NOW)
-
-        ## THERE IS A PROBLEM WITH THIS PART OF THE NETWORK,  WON't WORK
-        for k in range(number_of_meters+1):
-            feed_data_test =[]
+            count_class = np.zeros([ number_of_classes ])
+            count_meter = np.zeros([ number_of_meters + 1 ])
             test_label = []
-            preds = []
-            count=0
-            for i in range(np.shape(x_test)[0]): # Looping through each samples
-                tmp = int(test_data_meter[i])      # Temporary Meter Variable
-                tmp_class = y_test[i]
-                # Then we check if we add the test sample to the prediction of some time series
-                if count_meter[int(tmp)] <= num_of_test_samples and tmp == k:
-                    test_label.append(tmp_class)
-                    feed_data_test.append(x_test[i,:])
-                    count_meter[int(tmp)] = count_meter[int(tmp)] + 1
-                    count = count+1
+            #predictions = np.zeros([number_of_meterseters ]) # stores predictions for each meter
+
+            # WANT TO TAKE K SAMPLES FROM EACH METER AND CLASSIFY THEM CORRECTLY (DONT BOTHER ABVOUT CLASS FOR NOW)
+
+            ## THERE IS A PROBLEM WITH THIS PART OF THE NETWORK,  WON't WORK
+            for k in range(number_of_meters+1):
+                feed_data_test =[]
+                test_label = []
+                preds = []
+                count=0
+                for i in range(np.shape(x_test)[0]): # Looping through each samples
+                    tmp = int(test_data_meter[i])      # Temporary Meter Variable
+                    tmp_class = y_test[i]
+                    # Then we check if we add the test sample to the prediction of some time series
+                    if count_meter[int(tmp)] <= num_of_test_samples and tmp == k:
+                        test_label.append(tmp_class)
+                        feed_data_test.append(x_test[i,:])
+                        count_meter[int(tmp)] = count_meter[int(tmp)] + 1
+                        count = count+1
 
 
 
-            # Make predictions for the slices of meter k
-            if count >= min_num_of_test_samples:
-                # get return counts for each classes
-                feed_data_big = np.transpose(np.stack(feed_data_test, axis = -1))
-                batch_size_temp = 1
-                iters_temp      = int(np.floor(feed_data_big.shape[0] / float(batch_size_temp)))
+                # Make predictions for the slices of meter k
+                if count >= min_num_of_test_samples:
+                    # get return counts for each classes
+                    feed_data_big = np.transpose(np.stack(feed_data_test, axis = -1))
+                    batch_size_temp = 1
+                    iters_temp      = int(np.floor(feed_data_big.shape[0] / float(batch_size_temp)))
 
-                for t in range(iters_temp):
-                    feed_data_test_batch = feed_data_big[t * batch_size_temp:(t + 1) * batch_size_temp,:]
-                       
-                    pred_temp = sess.run(
-                        [y_pred],
-                        feed_dict={n_particles: ll_samples,
-                                is_training: False,
-                                x: feed_data_test_batch})
+                    for t in range(iters_temp):
+                        feed_data_test_batch = feed_data_big[t * batch_size_temp:(t + 1) * batch_size_temp,:]
+                        
+                        pred_temp = sess.run(
+                            [y_pred],
+                            feed_dict={n_particles: ll_samples,
+                                    is_training: False,
+                                    x: feed_data_test_batch})
+                        
+                        preds.append(pred_temp)
                     
-                    preds.append(pred_temp)
-                
 
-                a,return_index,return_counts = np.unique(preds, return_index=True, return_counts=True)
-                final_pred = a[np.argmax(return_counts)]
-                if int(final_pred) == int(test_label[0]):
-                    correct_test_prediction.append(1)
-                else:
-                    correct_test_prediction.append(0)
+                    a,return_index,return_counts = np.unique(preds, return_index=True, return_counts=True)
+                    final_pred = a[np.argmax(return_counts)]
+                    if int(final_pred) == int(test_label[0]):
+                        correct_test_prediction.append(1)
+                    else:
+                        correct_test_prediction.append(0)
+            final_test_accuracy = 100*np.round(np.mean(correct_test_prediction),decimals = 3)
+            fin_acc.append(final_test_accuracy)
+            num_met.append(len(correct_test_prediction))
+            print("Final Test Accuracy is "+str(final_test_accuracy) + "Number of Meters Used in evaluation is "+ str(len(correct_test_prediction)))
+        plt.figure(1)
+        plt.plot(fin_acc)
+        plt.show()
+        plt.figure(2)
+        plt.plot(num_met)
+        plt.show()
         
-       
-        plt.plot(correct_test_prediction)
-        plt.show(block = False)
-        final_test_accuracy = str(100*np.round(np.mean(correct_test_prediction),decimals = 3))+ " %"
-        print("Final Test Accuracy is "+final_test_accuracy)
+        
 
         print("DONE!")
