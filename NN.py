@@ -67,7 +67,8 @@ def load_data(slice_size):
         number_of_classes,number_of_meters
 
 def main(slice_size,l):
-
+    tf.set_random_seed(1234)
+    np.random.seed(1234)
     print("Slice_Size: ", str(slice_size))
     ############ LOADING DATA ##################################
     y_train, X_train, X_val, y_val, y_data_confusion,test_data_meter, \
@@ -81,6 +82,7 @@ def main(slice_size,l):
     learning_rate = 0.001
     zero_factor = 0.3
     batchsize = 50
+    test_one_meter = True 
 
     # Number of hidden nodes in the network
     N1 = 100
@@ -206,7 +208,7 @@ def main(slice_size,l):
     ## Training ##
 
     init = tf.global_variables_initializer()
-    tf.set_random_seed(2015)
+    
     val_loss = []
     val_acc = []
     train_loss = []
@@ -223,7 +225,7 @@ def main(slice_size,l):
         t1 = time.time()
         sess.run(init)
         print("Optimization Started")
-        for epoch in range(15):
+        for epoch in range(5):
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
             indices = np.random.permutation(X_train.shape[0])
@@ -269,10 +271,11 @@ def main(slice_size,l):
         print("Starting To Compute The final test accuracy")
         print("Doing this for a varied number of minimal samples")
         fin_acc = []
-        for min_num_of_test_samples in range(1, 50, 10):
+        for min_num_of_test_samples in range(1, 1, 1):
             
             correct_test_prediction = []
             num_of_test_samples = 300
+            #min_num_of_test_samples = 1
             #min_num_of_test_samples = 5
             # start looping through each separate time series
             
@@ -325,20 +328,85 @@ def main(slice_size,l):
                     else:
                         correct_test_prediction.append(0)
             
+                ## SELECT ONE METER AND PERFORM CHECK  
         
-            
+
             
             final_test_accuracy = 100*np.round(np.mean(correct_test_prediction),decimals = 3)
-            print("Final Test Accuracy is "+str(final_test_accuracy) + "Number of Meters Used in evaluation is "+ str(len(correct_test_prediction)))
+            print("Final Test Accuracy is: "+str(final_test_accuracy) + ". Number of Meters Used in evaluation is "+ str(len(correct_test_prediction)))
             t2 = time.time()
             print("Time-Elapsed is " + str((t2-t1)/60) +" minutes.")
             fin_acc.append(final_test_accuracy)
+
+        if(test_one_meter == True):
+            for meter_number in test_data_meter:
+                # Perform testing on one meter to compare accuracies
+                # pick one meter
+                count_class = np.zeros([ number_of_classes ])
+                count_meter = np.zeros([ number_of_meters + 1 ])
+                #meter_number = 251
+                feed_data_test =[]
+                test_label = []
+                preds = []
+                num_of_test_samples = 300
+                count=0
+                for i in range(np.shape(X_val)[0]): # Looping through each samples
+                    tmp = int(test_data_meter[i])      # Temporary Meter Variable
+                    tmp_class = int(y_data_confusion[i])
+                    # Then we check if we add the test sample to the prediction of some time series
+                    if count_meter[tmp] <= num_of_test_samples and tmp == meter_number:
+                        test_label.append(tmp_class)
+                        feed_data_test.append(X_val[i,:])
+                        count_meter[tmp] = count_meter[tmp] + 1
+                        count = count+1
+                # Feed data conains the slices for meter 2
+                inds = np.flip(np.arange(0,len(feed_data_test)))
+                av = []
+                for num_slices in [1,2,4,5,8,10,20,25,40,50,100,200]:
+                    split_inds = np.split(inds,len(feed_data_test)/num_slices)
+                    correct_test_prediction = []
+                    for k in range(len(split_inds)): # Voting loop
+                        
+                        preds = []
+                        for i in range(num_slices):
+                            pred_temp = sess.run(
+                                y_pred,
+                                feed_dict={X: [feed_data_test[split_inds[k][i]]], dropout: 1,istraining: False}) + 1
+                            
+                            preds.append(pred_temp)
+                        a,return_index,return_counts = np.unique(preds, return_index=True, return_counts=True)
+                        final_pred = a[np.argmax(return_counts)]
+                        if int(final_pred) == int(test_label[0]):
+                            correct_test_prediction.append(1)
+                        else:
+                            correct_test_prediction.append(0)
+                    av.append(np.mean(correct_test_prediction))
+                    #print(np.mean(correct_test_prediction))    
+                
+                plt.plot([1,2,4,5,8,10,20,25,40,50,100,200],av,'r',alpha= 0.4)
+                plt.ion()
+                plt.show()
+                plt.pause(0.001)
+
+
+
+
+
+
+
+
+
+
+
+
     filename = "D:\Master_Thesis_Results\Result"
     if os.path.exists(filename + ".csv"):
         print("Removing old "+ filename + ".csv"+ " before writing new.")
         os.remove(filename_left_out_slice + ".csv")
     plt.figure(1)
-    plt.plot(np.arange(1,50,10),fin_acc)
+    plt.plot(np.arange(1,1,1),fin_acc)
+    plt.ylabel(" Voting Accuracy ")
+    plt.xlabel(" Number of Slices Per Meter ")
     plt.show()
     plt.figure(2)
     plt.plot(val_loss,'r')

@@ -5,7 +5,8 @@ import random
 from scipy import interpolate
 import os
 from sklearn.preprocessing import minmax_scale
-
+import time
+import itertools
 
 # PARAMETERS TO CHANGE
 ## INTERPOLATIONFUNCTION FOR SLICES
@@ -35,15 +36,17 @@ def shuffle_data(input_data):
     return output_data
 
 def main(time_points):
+    t0 = time.time()
     np.random.seed(seed=2018)
     random.seed(2018)
     print("Number of time_Points is " + str(time_points))
     number_of_training_slices = 200
     min_number_of_training_slices = 1
-    number_of_test_slices     = 200
-    min_number_of_test_slices  = 50
+    number_of_test_slices     =  200
+    min_number_of_test_slices  = 200
     zeros_slice_percentage = 0.3
 
+    testing_voting = True # Set to true if min = max in number of test slices
 
     path = "D:\Master_Thesis_Data\Concatenated_File_total.csv"
     #Hard Threshholding for removing outliers
@@ -107,6 +110,7 @@ def main(time_points):
 
                 X_resampled.append(X[i*time_points:i*time_points+time_points,j]) #+ np.random.normal(0,np.sqrt(var),np.shape(X[i*time_points:i*time_points+time_points,j])))
                 y_resampled.append(label)
+
                 meter_resampled.append(j)
 
                 count = count+1
@@ -116,40 +120,21 @@ def main(time_points):
                 np.var(X[i*time_points:i*time_points+time_points,j]) > 1e-3:
                 # Filling NaN's with interpolation if the number of NaN's per slice is below some limit
                 
-
-                # Take non Constant Slices
-
                 out = interp(X[i*time_points:i*time_points+time_points,j])
-                #nan_indices = np.where( booleans[i*time_points:i*time_points+time_points,j] == False )
-
-                #for k in nan_indices:
-                 #   X[i*time_points+k,j] = np.nanmean(X[i*time_points:i*time_points+time_points,j]) # setting Nan's to mean value
-
+               
                 X_resampled.append(out)
+
                 y_resampled.append(label)
+
                 meter_resampled.append(j)
+
                 count = count+1
 
 
-            else: # Monitor the Slices that are left out
-                  
-                left_out_slice.append(X[i*time_points:i*time_points+time_points,j])
-                boolvec.append(time_points-np.sum(booleans[i*time_points:i*time_points+time_points,j]))
+            
 
         number_of_chunks_per_customer.append(count)
-
-
-    #plt.hist(boolvec)
-    #plt.title("Histogram of number of NaN's per slice with the maximum nuber of zeros equal to "+str(int(time_points*zeros_slice_percentage)))
-    #plt.show()
-    #left_out_slice = np.stack(left_out_slice,axis=-1)
-    #plt.plot(number_of_chunks_per_customer)
-   # plt.title("Distribution of Number of Chunks on Customers/Meters")
-   # plt.show()
-
-                                        
-                                        
-                                        
+                                
 
     #######################  Creates dataset of slices for test dataset    ###############################
     number_of_chunks_per_customer_test = []
@@ -175,8 +160,6 @@ def main(time_points):
                     meter_resampled_test.append(j)
         number_of_chunks_per_customer_test.append(count)
 
-
-
     #Next we build the matrix of slices
 
     X_resampled = np.stack(X_resampled,axis=-1)  # Stacked data
@@ -196,81 +179,102 @@ def main(time_points):
     
     
     # Create Loop for taking max number of samples from each meter
-                                        
-    X_resampled      = []
-    X_resampled_test = []
+    # TO DO :
+    # Create a matrix of x_resampled and x_resampled_test where slices from each meter are appended to each column --> 
+    # a matrix with time_series of meters where each meter corrrespons to a list
+    # use a dictionary  
+    # DONE!                                   
+    X_resampled      = [[] for _ in range(meter_range+1)]
+    X_resampled_test = [[] for _ in range(meter_range_test+1)]
     count_meter      = np.zeros(meter_range+1) # Number of meters in training set
     count_meter_test = np.zeros(meter_range_test+1)
-
-
-    for i in range(np.shape(X_big)[1]):     # Go through every sample
-        
-        index = int(X_big[0,i])             # Converts Float to integer for indexing
-        
-        if count_meter[index] < number_of_training_slices: # checking if we have no more than max_number of slices of meter index.
-            
-            X_resampled.append(X_big[:,i])
-
-            count_meter[index] = count_meter[index] + 1 # Keeps track of number of samples extracted from each meter
-            
     
 
-    for i in range(np.shape(X_big_test)[1]):
-        
+    for i in range(np.shape(X_big)[1]):     # Go through every sample  
+        index = int(X_big[0,i])             # Converts Float to integer for indexing    
+        if count_meter[index] < number_of_training_slices: # checking if we have no more than max_number of slices of meter index.  
+            X_resampled[index].append(X_big[:,i])
+            count_meter[index] = count_meter[index] + 1 # Keeps track of number of samples extracted from each meter
+    
+    
+    print(len(X_resampled))
+    for i in range(np.shape(X_big_test)[1]): 
         index = int(X_big_test[0,i])
-        
         if count_meter_test[index] < number_of_test_slices:
-           X_resampled_test.append(X_big_test[:,i])
+           X_resampled_test[index].append(X_big_test[:,i])
            count_meter_test[index] = count_meter_test[index] + 1
-           
+    del(X_big)
+    del(X_big_test)         
 
     gurk1 = np.asarray(np.where(count_meter < min_number_of_training_slices))
-    #indgurk1 = count_meter[gurk1]
     gurk2 = np.asarray(np.where(count_meter_test < min_number_of_test_slices))
     rem = np.where(count_meter_test >= min_number_of_test_slices)
     indgurk2 = count_meter_test[rem]
-   
-    del(X_big)
-    del(X_big_test)                                       
-    X_big_tmp      = np.stack(X_resampled,      axis=-1)      
-    X_big_test_tmp = np.stack(X_resampled_test, axis=-1)
-    del_indices = []
-    for i in range(np.shape(X_big_tmp)[1]):
-        for p in range(np.shape(gurk1)[1]):
-            if X_big_tmp[0,i] == gurk1[0][p]:
-                del_indices.append(i)
-    X_big = np.delete(X_big_tmp, del_indices, 1)
+    #########################################################################
+    # Delete the lists i.e meters containing less than min number of slices #
+    #########################################################################
+    for i in sorted(np.squeeze(gurk1).tolist(),reverse =True):
+        del(X_resampled[i])
+    for i in sorted(np.squeeze(gurk2).tolist(),reverse  =True):
+        del(X_resampled_test[i])
+    
+     
+    X_big = np.stack(list(itertools.chain.from_iterable(X_resampled))           , axis = -1)  
+
+    if(testing_voting == False):  
+        X_big_test = np.stack(list(itertools.chain.from_iterable(X_resampled_test)) , axis = -1)
+    
 
 
-    del_indices = []
-    for i in range(np.shape(X_big_test_tmp)[1]):
-        for p in range(np.shape(gurk2)[1]):
-            if X_big_test_tmp[0,i] == gurk2[0][p]:
-                print(gurk2[0][p])
-                del_indices.append(i)
+    ##### Need to sort X_big and X_big_test by classes, how to do this: 
+    # Create new subsets and then randomly pruning them to the same size?
+    # Same approach as previously, 
 
-    X_big_test = np.delete(X_big_test_tmp, del_indices, 1)
-                                        
-    plt.hist(rem)
+
+    # Tring to only sort the test set for now
+    if (testing_voting == True):
+        labels = []
+        # Assuming now that each meter has the sane number of slices we will find the class with the fewest number of meters
+        for k in range(len(X_resampled_test)):
+            labels.append(X_resampled_test[k][0][1])    #[k]: meter [0] take first slice [1] class of slices, same for all slices in meter k
+           # for l in range(10):
+            #    print(X_resampled_test[k][l][1]) #Sanity Check
+        # Labels contain the labels for all the meters in the test set.
+        a,return_index,return_counts = np.unique(labels, return_index=True, return_counts=True)
+        # Return counts will give us the smallest number of meters in a class.
+        min_number_of_samples_test = np.min(return_counts)
+        # Go through X_resampled_test again and remove meters from the not smallest class until the dataset is balanced
+        count_classes = np.zeros(number_of_classes)
+        for k in sorted(np.arange(0,len(X_resampled_test)),reverse = True):
+            class_index = int(X_resampled_test[k][0][1])-1
+            if count_classes[class_index] >= min_number_of_samples_test:
+                del(X_resampled_test[k])
+
+            count_classes[class_index] = count_classes[class_index]+1
+                # Need to add to count_classes[index]!!!
+        data_shuffeled_test = np.stack(list(itertools.chain.from_iterable(X_resampled_test)) , axis = -1)
+
+
+
+
+                                 
+    plt.hist(indgurk2)
     plt.title("Distribution of number of samples per meter in the test set")
     plt.show()
                                         
     # To keep rest of code running we remove first row so we are left with data containg the label and the data.
     #X_big      = np.zeros([np.shape(X_big_tmp)[0],np.shape(X_big_tmp)[1]])
     #X_big_test = np.zeros([np.shape(X_big_test_tmp)[0],np.shape(X_big_test_tmp)[1]])
-
-
     #X_big[:,:]      = X_big_tmp[:,:]
     #X_big_test[:,:] = X_big_test_tmp[:,:]                                  
-    del(X_big_tmp)
-    del(X_big_test_tmp)
-    print(np.shape(X_big))
-    print(np.shape(X_big_test))
+    
+   # print(np.shape(X_big))
+    #print(np.shape(X_big_test))
 
     # Sorting the datamatrices in order to take same number of samples from each class
     X_big = X_big[:,np.argsort(X_big[1,:])]
     print(X_big)
-    X_big_test = X_big_test[:,np.argsort(X_big_test[1,:])]
+    
 
     a,return_index,return_counts = np.unique(X_big[1,:], return_index=True, return_counts=True)
 
@@ -280,36 +284,53 @@ def main(time_points):
 
     print()
     print()
-    a_test,return_index_test,return_counts_test = np.unique(X_big_test[1,:] ,return_index=True, return_counts=True)
-    print("The number of samples in each class in test set is distributed as follows" )
-    print(return_counts_test)
-    print(return_index_test)
-    print()
+    if(testing_voting == False):
+        X_big_test = X_big_test[:,np.argsort(X_big_test[1,:])]
+        a_test,return_index_test,return_counts_test = np.unique(X_big_test[1,:] ,return_index=True, return_counts=True)
+        print("The number of samples in each class in test set is distributed as follows" )
+        print(return_counts_test)
+        print(return_index_test)
+        print()
+        min_number_of_samples_test = np.min(return_counts_test)
 
     #Building final dataset of min_number_of_samples per class, randomly sampled and shuffeled
     min_number_of_samples      = np.min(return_counts) # The number of samples from the smallest class
-    min_number_of_samples_test = np.min(return_counts_test)
+    
 
     indexvector = np.arange(0,np.shape(X_big)[1]) # Indices of all samples
-    indexvector_test = np.arange(0,np.shape(X_big_test)[1])
+    
+    
     
     data_shuffeled = np.ones([time_points+2,number_of_classes*min_number_of_samples]) #Preallocate memory for final data array.
-    data_shuffeled_test = np.ones([time_points+2,number_of_classes*min_number_of_samples_test])
+    if (testing_voting == False):
+        indexvector_test = np.arange(0,np.shape(X_big_test)[1])
+        data_shuffeled_test = np.ones([time_points+2,number_of_classes*min_number_of_samples_test])
 
+       # We have to select min_number_of samples from all the classes, but the problem is that we cannot do this randomly if we want to maintain the meter balance,
+       # 
+       # Have to do this in a more controlled way! loop?
+       # 
+ 
+    
+    #  What needs to be done is to create a function which takes the min number of samples from each class,
+    #  but also takes at least min_number_of_test_slices from each meter ! HOW TO DO THIS???? 
+    # have to map indices of
+    # Now we have 
+    # We can now balance the datasets based on classes  
+
+    
 
     for i in range(number_of_classes):
-    #Picks min_number_of_samples random indices from each class and puts them in the final data array.
+        #Picks min_number_of_samples random indices from each class and puts them in the final data array.
         indexchoice = np.random.choice(indexvector[return_index[i]:return_index[i] + return_counts[i]],\
                                        min_number_of_samples,replace=False) 
-
-        indexchoice_test = np.random.choice(indexvector_test[return_index_test[i]:return_index_test[i]+return_counts_test[i]],\
-                                            min_number_of_samples_test,replace=False)
-
         data_shuffeled[:,i*min_number_of_samples:(i+1)*min_number_of_samples] = \
         X_big[:,indexchoice]
-
-        data_shuffeled_test[:,i*min_number_of_samples_test:i*min_number_of_samples_test+min_number_of_samples_test] = \
-        X_big_test[:,indexchoice_test]
+        if(testing_voting == False):
+            indexchoice_test = np.random.choice(indexvector_test[return_index_test[i]:return_index_test[i]+return_counts_test[i]],\
+                                                min_number_of_samples_test,replace=False)
+            data_shuffeled_test[:,i*min_number_of_samples_test:i*min_number_of_samples_test+min_number_of_samples_test] = \
+            X_big_test[:,indexchoice_test]
 
     print(np.any(np.isnan(data_shuffeled)))
     print(np.any(np.isnan(data_shuffeled_test)))
@@ -325,7 +346,7 @@ def main(time_points):
     print()
     print()
 
-    print("The number of samples in each class for Test set is " +str(min_number_of_samples_test)+".")
+    print("The number of samples in each class for Test set is " +str()+".")
     print(return_counts2_test)
     print(return_index2_test)
     print()
@@ -346,6 +367,7 @@ def main(time_points):
     print(np.any(np.isnan(data_shuffeled_test)))
     # Final shuffle of the training data
     data_shuffeled = shuffle_data(data_shuffeled)
+    data_shuffeled_test = shuffle_data(data_shuffeled_test)
     # Extract final data, write to csv
 
     y_one_hot = np.zeros([number_of_classes,np.shape(data_shuffeled)[1]])
@@ -353,7 +375,7 @@ def main(time_points):
         for p in range(number_of_classes):
             if p+1 == data_shuffeled[1,k]:
                 y_one_hot[p,k] = 1
-    print(np.shape(y_one_hot)[1])
+    #print(np.shape(y_one_hot)[1])
 
     y_one_hot_test = np.zeros([number_of_classes,np.shape(data_shuffeled_test)[1]])
     for k in range(np.shape(data_shuffeled_test)[1]):
@@ -389,14 +411,14 @@ def main(time_points):
         os.remove(filename_y_one_hot_test + ".csv")
     np.savetxt(filename_y_one_hot_test + ".csv", y_one_hot_test ,delimiter = ';') # Prints data to file
 
+    #filename_left_out_slice = "D:\Master_Thesis_Data\Left_Out_Data"
+    #if os.path.exists(filename_left_out_slice + ".csv"):
+      #  print("Removing old "+ filename_left_out_slice + ".csv"+ " before writing new.")
+      #  os.remove(filename_left_out_slice + ".csv")
+   # np.savetxt(filename_left_out_slice +".csv", np.transpose(left_out_slice),delimiter = ';')
 
-
-
-    filename_left_out_slice = "D:\Master_Thesis_Data\Left_Out_Data"
-    if os.path.exists(filename_left_out_slice + ".csv"):
-        print("Removing old "+ filename_left_out_slice + ".csv"+ " before writing new.")
-        os.remove(filename_left_out_slice + ".csv")
-    np.savetxt(filename_left_out_slice +".csv", np.transpose(left_out_slice),delimiter = ';')
+    t1 = time.time()
+    print("Code ran in:" +str(np.round((t1-t0)/60,decimals=3)) +" seconds.")
     return 0
 
 
