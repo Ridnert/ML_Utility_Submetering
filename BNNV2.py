@@ -85,9 +85,17 @@ def var_dropout(observed, x, n, net_size, n_particles, is_training):
             if i < len(net_size) - 2:
                 h = tf.nn.relu(h)
 
-            
-        y = zs.Categorical('y', h,group_ndims=0)
+            print(np.shape(h)) 
         
+        
+        y_logstd = tf.get_variable(
+            'y_logstd', shape=[],
+            initializer=tf.constant_initializer(0.))
+        noise = tf.random_normal(shape=tf.shape(h), mean=0.0, stddev=0.1, dtype=tf.float32)
+        
+        y = zs.Categorical('y', h+noise)
+       # print(i)
+        print(np.shape(y))
     return model, h
 
 
@@ -96,15 +104,27 @@ def q(observed, n, net_size, n_particles):
     # Build the variational posterior distribution.
     # We assume it is factorized
     with zs.BayesianNet(observed=observed) as variational:
+        ws = []
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
             with tf.variable_scope('layer' + str(i)):
-                logit_alpha = tf.get_variable('logit_alpha', [n_in])
+                logit_alpha = tf.get_variable('logit_alpha', [n_in],initializer=tf.constant_initializer(0.1))
             
             alpha = tf.nn.sigmoid(logit_alpha)
             alpha = tf.tile(tf.expand_dims(alpha, 0), [n, 1])
-            eps = zs.Normal('layer' + str(i) + '/eps',
-                            1., logstd=0.5 * tf.log(alpha + 1e-6),
-                            n_samples=n_particles, group_ndims=1)
+           # eps = zs.Normal('layer' + str(i) + '/eps',
+                       #     1., logstd=0.5 * tf.log(alpha + 1e-6),
+                         #   n_samples=n_particles, group_ndims=1)
+            w_mean = tf.get_variable(
+                    'w_mean_' + str(i), shape=[n_in ],
+                    initializer=tf.constant_initializer(0.))
+            w_logstd = tf.get_variable(
+                'w_logstd_' + str(i), shape=[ n_in ],
+                initializer=tf.constant_initializer(0.))
+            w_mean = tf.tile(tf.expand_dims(w_mean, 0), [n, 1])
+            w_logstd = tf.tile(tf.expand_dims(w_logstd, 0), [n, 1])
+            ws.append(
+                zs.Normal('layer' + str(i)+ '/eps', w_mean, logstd=w_logstd,
+                        n_samples=n_particles, group_ndims=1))
     return variational
 
 
@@ -130,12 +150,11 @@ if __name__ == '__main__':
             number_of_classes,number_of_meters,max_meter_number = \
         load_data(slice_size)
     
-    y_train = y_train.astype(int)-1
-    
-    y_test = y_test.astype(int)-1
+    y_train = y_train.astype(int)
+    y_test = y_test.astype(int)
     # Define training/evaluation parameters
     epochs = 5
-    batch_size = 20
+    batch_size = 200
     batch_size_test = 20
     lb_samples = 30
     ll_samples = 500
@@ -214,7 +233,7 @@ if __name__ == '__main__':
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size,:]
                 y_batch = y_train[t * batch_size:(t + 1) * batch_size]
                 _, lb  = sess.run(
-                    [infer, lower_bound],
+                    [infer, log_qWs],
                     feed_dict={n_particles: lb_samples,
                                is_training: True,
                                learning_rate_ph: learning_rate,
@@ -244,7 +263,7 @@ if __name__ == '__main__':
                     test_preds.append(pred)
                     
                 time_test += time.time()
-                print(np.mean(pred,axis = 0))
+                #print(np.mean(pred,axis = 0))
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
                 print('>> Test accuracy = {},  log(p(y|x,W)) = {} '.format(np.mean(test_accs), (np.mean(test_ll))))
@@ -256,7 +275,7 @@ if __name__ == '__main__':
         for min_num_of_test_samples in range(0, 1, 1):    
             correct_test_prediction = []
             num_of_test_samples = 3000
-            min_num_of_test_samples = 50
+            min_num_of_test_samples = 1
             # start looping through each separate time series
             
             count_class = np.zeros([ number_of_classes ])

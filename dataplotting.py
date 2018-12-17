@@ -7,7 +7,7 @@ import os
 from sklearn.preprocessing import minmax_scale
 import time
 import itertools
-
+import matplotlib as mpl
 # PARAMETERS TO CHANGE
 ## INTERPOLATIONFUNCTION FOR SLICES
 
@@ -35,18 +35,28 @@ def shuffle_data(input_data):
     output_data   = input_data[:,choice]
     return output_data
 
+def count_nans(input_time_series):
+    countnan = 0
+    for k in range(len(input_time_series)):
+        if input_time_series[k] < 0:
+            countnan = countnan + 1
+    return countnan/len(input_time_series)
+
 def main(time_points):
     t0 = time.time()
     np.random.seed(seed=2018)
     random.seed(2018)
     print("Number of time_Points is " + str(time_points))
     number_of_training_slices = 200
-    min_number_of_training_slices = 1
-    number_of_test_slices     =  200
-    min_number_of_test_slices  = 200
-    zeros_slice_percentage = 0.3
+    min_number_of_training_slices = 5
+    number_of_test_slices     =  50
+    min_number_of_test_slices  = 50
+    zeros_slice_percentage = 0.2
 
-    testing_voting = True # Set to true if min = max in number of test slices
+    
+
+    class_names = [" Cooling "," Electricity ", "Heating", " Hot Water", " Cold Water "]
+    testing_voting = False # Set to true if min = max in number of test slices
 
     path = "D:\Master_Thesis_Data\Concatenated_File_total.csv"
     #Hard Threshholding for removing outliers
@@ -54,8 +64,22 @@ def main(time_points):
     data = df.values
     shape = np.shape(data)
     # Shuffeling the data
+    if (False):
+        # COunting nans
+        print("Counting NanS")
+        nan_percentage = []
+        color_array =[]
+        for i in range(np.shape(data)[1]):
+            nan_percentage.append(count_nans(data[:,i]))
+            color_array.append(1/data[0,i])
+            print(" Counting:  " + str(i))
+        x = np.arange(0,i+1)
+        plt.scatter(x,nan_percentage,c = color_array)
+        plt.xlabel(" Meter ")
+        plt.ylabel(" Missing Value Quotient ")
+        plt.show()
     data   = shuffle_data(data)
-
+    
     print("Number of Time Series is:" + str(np.shape(data)[1]))
     print( np.any(np.isnan(data)))
     max_length = np.shape(data)[0]
@@ -63,7 +87,7 @@ def main(time_points):
 
 
     training_percentage = 0.8
-    threshhold = 5000              # To remove outliers                         
+    threshhold = 1e16              # To remove outliers                         
         # 720 is one month 9000 a year
     indices = data[:,:] < threshhold
     data[indices == False] = -1 
@@ -101,7 +125,7 @@ def main(time_points):
     
         #  if count < num_of_training_slices: # Change this to change the number of snippets from each time-series
             if  np.all(booleans[i*time_points:i*time_points+time_points,j]) == True and \
-            np.sum(booleans2[i*time_points:i*time_points+time_points,j]) < time_points*zeros_slice_percentage and\
+            np.sum(booleans2[i*time_points:i*time_points+time_points,j]) <= time_points*zeros_slice_percentage and\
             np.var(X[i*time_points:i*time_points+time_points,j]) > 1e-3:
 
                
@@ -116,7 +140,7 @@ def main(time_points):
                 count = count+1
 
             elif np.sum(booleans[i*time_points:i*time_points+time_points,j]) > 0.8*time_points and \
-                np.sum(booleans2[i*time_points:i*time_points+time_points,j]) < time_points*zeros_slice_percentage and \
+                np.sum(booleans2[i*time_points:i*time_points+time_points,j]) <= time_points*zeros_slice_percentage and \
                 np.var(X[i*time_points:i*time_points+time_points,j]) > 1e-3:
                 # Filling NaN's with interpolation if the number of NaN's per slice is below some limit
                 
@@ -151,7 +175,7 @@ def main(time_points):
             # In this statement we take the chunks where all values are greater or equal to zero(I.e excluding the NaN) and where there are at most 25% values equal to zero.
             #Then append them in X_resampled
     
-            if  np.all(booleans_test[i*time_points:i*time_points+time_points,j]) == True and np.sum(booleans2_test[i*time_points:i*time_points+time_points,j]) < time_points*zeros_slice_percentage: 
+            if  np.all(booleans_test[i*time_points:i*time_points+time_points,j]) == True and np.sum(booleans2_test[i*time_points:i*time_points+time_points,j]) <= time_points*zeros_slice_percentage: 
                 if np.var(X_test[i*time_points:i*time_points+time_points,j]) > 1e-3:  # Avoid having all the same inputs, want to capture some patterns
 
                     X_resampled_test.append(X_test[i*time_points:i*time_points+time_points,j])
@@ -188,7 +212,7 @@ def main(time_points):
     X_resampled_test = [[] for _ in range(meter_range_test+1)]
     count_meter      = np.zeros(meter_range+1) # Number of meters in training set
     count_meter_test = np.zeros(meter_range_test+1)
-    
+    count_meter_class = [np.zeros(meter_range_test+1) for _ in range(number_of_classes) ]
 
     for i in range(np.shape(X_big)[1]):     # Go through every sample  
         index = int(X_big[0,i])             # Converts Float to integer for indexing    
@@ -200,16 +224,26 @@ def main(time_points):
     print(len(X_resampled))
     for i in range(np.shape(X_big_test)[1]): 
         index = int(X_big_test[0,i])
+        classtmp = int(X_big_test[1,i])-1
         if count_meter_test[index] < number_of_test_slices:
            X_resampled_test[index].append(X_big_test[:,i])
            count_meter_test[index] = count_meter_test[index] + 1
+           count_meter_class[classtmp][index] = count_meter_class[classtmp][index] + 1
     del(X_big)
     del(X_big_test)         
-
+    # Want to create a indgurk2 for each classes separately and make histograms of that,
+    # This will show the distribution of the number of slices over the meters for each class
+    # Gives " Quality measure " for the meters in each class
     gurk1 = np.asarray(np.where(count_meter < min_number_of_training_slices))
     gurk2 = np.asarray(np.where(count_meter_test < min_number_of_test_slices))
-    rem = np.where(count_meter_test >= min_number_of_test_slices)
-    indgurk2 = count_meter_test[rem]
+    for k in range(number_of_classes):
+        rem = np.where(count_meter_class[k] >= min_number_of_test_slices)
+        indgurk2 = count_meter_test[rem]
+        plt.hist(indgurk2)
+        plt.title("Class: " + class_names[k])
+        plt.xlabel("Number of Slices")
+        plt.ylabel("Number of Meters")
+        plt.show()
     #########################################################################
     # Delete the lists i.e meters containing less than min number of slices #
     #########################################################################
@@ -242,7 +276,9 @@ def main(time_points):
         # Labels contain the labels for all the meters in the test set.
         a,return_index,return_counts = np.unique(labels, return_index=True, return_counts=True)
         # Return counts will give us the smallest number of meters in a class.
-        min_number_of_samples_test = np.min(return_counts)
+        min_number_of_samples_test = np.max(return_counts)
+        print("The number of samples in each class in test set is distributed as follows" )
+        print(return_counts)
         # Go through X_resampled_test again and remove meters from the not smallest class until the dataset is balanced
         count_classes = np.zeros(number_of_classes)
         for k in sorted(np.arange(0,len(X_resampled_test)),reverse = True):
@@ -258,9 +294,7 @@ def main(time_points):
 
 
                                  
-    plt.hist(indgurk2)
-    plt.title("Distribution of number of samples per meter in the test set")
-    plt.show()
+    
                                         
     # To keep rest of code running we remove first row so we are left with data containg the label and the data.
     #X_big      = np.zeros([np.shape(X_big_tmp)[0],np.shape(X_big_tmp)[1]])
@@ -418,7 +452,7 @@ def main(time_points):
    # np.savetxt(filename_left_out_slice +".csv", np.transpose(left_out_slice),delimiter = ';')
 
     t1 = time.time()
-    print("Code ran in:" +str(np.round((t1-t0)/60,decimals=3)) +" seconds.")
+    print("Code ran in:" +str(np.round((t1-t0)/60,decimals=3)) +" minutes.")
     return 0
 
 

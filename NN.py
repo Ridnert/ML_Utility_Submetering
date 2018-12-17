@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
+from sklearn.metrics import confusion_matrix
 import os
 import time
 
@@ -11,6 +12,7 @@ import numpy as np
 import zhusuan as zs
 import pandas as pd
 import matplotlib.pyplot as plt
+
 
     ## WILL BE BAYESIAN_NN not for now
 print("TF Version:", tf.__version__)
@@ -48,7 +50,8 @@ def load_data(slice_size):
 
 
    
-    number_of_meters = int(np.max(np.unique(test_data_meter)) ) # METER NUMBER RANGE
+    max_meter_number = int(np.max(np.unique(test_data_meter))) # METER NUMBER RANGE
+    number_of_meters = int(len(np.unique(test_data_meter)))
     print(" There are " +str(number_of_meters) + " unique meters in the test dataset.")
 
  
@@ -64,7 +67,7 @@ def load_data(slice_size):
     y_val   =  np.transpose(y_one_hot_test)
 
     return y_train, x_train, x_val, y_val, y_data_confusion,test_data_meter, \
-        number_of_classes,number_of_meters
+        number_of_classes,number_of_meters,max_meter_number
 
 def main(slice_size,l):
     tf.set_random_seed(1234)
@@ -72,7 +75,7 @@ def main(slice_size,l):
     print("Slice_Size: ", str(slice_size))
     ############ LOADING DATA ##################################
     y_train, X_train, X_val, y_val, y_data_confusion,test_data_meter, \
-        number_of_classes,number_of_meters = load_data(slice_size)
+        number_of_classes,number_of_meters,max_meter_number = load_data(slice_size)
     ########################################################## NETWORK #############################################
       
     # This code implements A HIDDEN LAYER NEURAL NETWORK With seven fully connected layers,
@@ -82,7 +85,7 @@ def main(slice_size,l):
     learning_rate = 0.001
     zero_factor = 0.3
     batchsize = 50
-    test_one_meter = True 
+    test_one_meter = False 
 
     # Number of hidden nodes in the network
     N1 = 100
@@ -225,7 +228,7 @@ def main(slice_size,l):
         t1 = time.time()
         sess.run(init)
         print("Optimization Started")
-        for epoch in range(5):
+        for epoch in range(15):
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
             indices = np.random.permutation(X_train.shape[0])
@@ -256,9 +259,12 @@ def main(slice_size,l):
 
 
         print("Optimization Finished")
-    
-       
+        print(" Checking the Confusion Matrix ")
 
+        preds  = sess.run( y_pred,
+                            feed_dict={X: X_val, dropout: 1,istraining: False}) + 1 
+        conf =  confusion_matrix(y_data_confusion, preds)
+        print(conf)
         ####################################################################################
         ########################## FINAL TEST ACCURACY CHECKING ############################
         ####################################################################################
@@ -271,23 +277,23 @@ def main(slice_size,l):
         print("Starting To Compute The final test accuracy")
         print("Doing this for a varied number of minimal samples")
         fin_acc = []
-        for min_num_of_test_samples in range(1, 1, 1):
+        for min_num_of_test_samples in range(0, 1, 1):
             
             correct_test_prediction = []
-            num_of_test_samples = 300
-            #min_num_of_test_samples = 1
+            num_of_test_samples = 3000
+            min_num_of_test_samples = 1
             #min_num_of_test_samples = 5
             # start looping through each separate time series
             
             count_class = np.zeros([ number_of_classes ])
-            count_meter = np.zeros([ number_of_meters + 1 ])
+            count_meter = np.zeros([ max_meter_number + 1 ])
             test_label = []
             #predictions = np.zeros([number_of_meterseters ]) # stores predictions for each meter
 
             # WANT TO TAKE K SAMPLES FROM EACH METER AND CLASSIFY THEM CORRECTLY (DONT BOTHER ABVOUT CLASS FOR NOW)
 
             ## THERE IS A PROBLEM WITH THIS PART OF THE NETWORK,  WON't WORK
-            for k in range(number_of_meters+1):
+            for k in range(max_meter_number+1):
                 feed_data_test =[]
                 test_label = []
                 preds = []
@@ -303,7 +309,7 @@ def main(slice_size,l):
                         count = count+1
 
                 #print(count)
-
+                #print(count)
                 # Make predictions for the slices of meter k
                 if count >= min_num_of_test_samples:
                     # get return counts for each classes
@@ -335,11 +341,12 @@ def main(slice_size,l):
             final_test_accuracy = 100*np.round(np.mean(correct_test_prediction),decimals = 3)
             print("Final Test Accuracy is: "+str(final_test_accuracy) + ". Number of Meters Used in evaluation is "+ str(len(correct_test_prediction)))
             t2 = time.time()
+            
             print("Time-Elapsed is " + str((t2-t1)/60) +" minutes.")
             fin_acc.append(final_test_accuracy)
 
         if(test_one_meter == True):
-            for meter_number in test_data_meter:
+            for meter_number in np.unique(test_data_meter):
                 # Perform testing on one meter to compare accuracies
                 # pick one meter
                 count_class = np.zeros([ number_of_classes ])
@@ -348,7 +355,7 @@ def main(slice_size,l):
                 feed_data_test =[]
                 test_label = []
                 preds = []
-                num_of_test_samples = 300
+                num_of_test_samples = 3000
                 count=0
                 for i in range(np.shape(X_val)[0]): # Looping through each samples
                     tmp = int(test_data_meter[i])      # Temporary Meter Variable
@@ -362,8 +369,8 @@ def main(slice_size,l):
                 # Feed data conains the slices for meter 2
                 inds = np.flip(np.arange(0,len(feed_data_test)))
                 av = []
-                for num_slices in [1,2,4,5,8,10,20,25,40,50,100,200]:
-                    split_inds = np.split(inds,len(feed_data_test)/num_slices)
+                for num_slices in range(1,100,2):
+                    split_inds = np.array_split(inds,len(feed_data_test)/num_slices)
                     correct_test_prediction = []
                     for k in range(len(split_inds)): # Voting loop
                         
@@ -382,11 +389,13 @@ def main(slice_size,l):
                             correct_test_prediction.append(0)
                     av.append(np.mean(correct_test_prediction))
                     #print(np.mean(correct_test_prediction))    
+                x = np.arange(1,100,2)
+                plt.plot(x,av,'r',alpha= 0.4)
                 
-                plt.plot([1,2,4,5,8,10,20,25,40,50,100,200],av,'r',alpha= 0.4)
-                plt.ion()
                 plt.show()
-                plt.pause(0.001)
+                #plt.pause(0.1)
+                print(int(test_label[0]))
+                print(av)
 
 
 
@@ -404,7 +413,7 @@ def main(slice_size,l):
         print("Removing old "+ filename + ".csv"+ " before writing new.")
         os.remove(filename_left_out_slice + ".csv")
     plt.figure(1)
-    plt.plot(np.arange(1,1,1),fin_acc)
+    plt.plot(np.arange(0,1,1),fin_acc)
     plt.ylabel(" Voting Accuracy ")
     plt.xlabel(" Number of Slices Per Meter ")
     plt.show()

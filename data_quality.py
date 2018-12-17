@@ -3,7 +3,13 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
+import matplotlib.patches as mpatches
+def count_nans(input_time_series):
+    countnan = 0
+    for k in range(len(input_time_series)):
+        if input_time_series[k] < 0:
+            countnan = countnan + 1
+    return countnan/len(input_time_series)
 
 
 def count_files(dir):
@@ -22,8 +28,8 @@ path_test = []
 path.append("D:\Master_Thesis_Data\Data_Big\cooling")
 path.append("D:\Master_Thesis_Data\Data_Big\electricity\energy")
 path.append("D:\Master_Thesis_Data\Data_Big\heating\energy")
-#path.append("D:\Master_Thesis_Data\Data_Big\hot_water")
-#path.append("D:\Master_Thesis_Data\Data_Big\water")
+path.append("D:\Master_Thesis_Data\Data_Big\hot_water")
+path.append("D:\Master_Thesis_Data\Data_Big\water")
 
 
 
@@ -42,13 +48,18 @@ print("Reading & merging files")
 
 Number_Of_Files_To_Use = min(num_files_total) # number of time series to extract from each class
 print(Number_Of_Files_To_Use)
-#Number_Of_Files_To_Use = 220
 
+nan_percentage = []
+
+binwidth = 2000
+colors = ["b","g","r","c","y"]
 # Loop over the classes
+plt.figure()
 for i in range(len(path)):    
     # Defines label
     label_value = i+1
     counter2 = 0
+    lengths = []
     for f in glob.glob(path[i] + "/*" + file_identifier):
         # This loops over all files in the path associated with each class.
         counter=counter+1
@@ -58,40 +69,37 @@ for i in range(len(path)):
             print(str(counter) + " out of " + str(Number_Of_Files_To_Use*len(path)) + " files have been merged.")
             
         df = pd.read_csv(f,sep=';',na_values=-1) # Reads the file and stores it as a pandas dataframe.
-        datalist.append(df) # appends the dataframe to a list
+        df.fillna(value=-1,inplace=True)
+        data = df.values
+        data = data[:,1]
+        lengths.append(len(data))
+        nan_percentage.append(count_nans(data))
         labels.append(label_value) # Appends label to a list.
         if counter2 > Number_Of_Files_To_Use:
             break
-all_data = pd.concat(datalist, axis = 1) # Concatenates the datafiles.
-del datalist # Freeing up some memory
-del df        
-print()
-print("Done!")
-all_data.fillna(value=-1,inplace=True)
-all_data = all_data.values # Extracs the values as array.
 
+    y,binEdges=np.histogram(lengths,bins=100)
+    bincenters = 0.5*(binEdges[1:]+binEdges[:-1])
+    plt.plot(bincenters,y,colors[i])
 
-
-
-num_of_samples = np.shape(all_data)[1]/2
-df_time_series = np.zeros([1+np.shape(all_data)[0],int(np.shape(all_data)[1]/2)]) # Plus one for allowing to add label vector
-print("Starting to build the time series matrix, disregarding the data of date & time.")
-
-
-# Looping over the number of samples
-for k in range(int(num_of_samples)):
-    if k%100 == 0 and k!=0:  
-        print(k)
-    df_time_series[1:int(np.shape(df_time_series)[0]),k] = all_data[:,2*k+1]
-
-
-df_time_series[0,:] = np.array([labels]) # adding the label vector as the first row in the data-matrix
-
-
-filename = "D:\Master_Thesis_Data\Concatenated_File_total"
-
-print("Done!, adding label vector and writing file to: " + filename +".csv")  
-if os.path.exists(filename + ".csv"): #Checks if file exists and if true removes this makes sure it overwrites it.
     
-    os.remove(filename + ".csv")
-np.savetxt(filename + ".csv", df_time_series ,delimiter = ';') # Prints data to file
+    #plt.hist(lengths,bins=range(min(lengths), max(lengths) + binwidth, binwidth),color = colors[i],alpha = 0.5)
+    plt.pause(0.05)
+plt.xlabel("Lengths")
+plt.ylabel("Number Of Meters")
+blue_patch = mpatches.Patch(color='red', label='Cooling')
+green_patch = mpatches.Patch(color='blue', label='Electricity')
+red_patch = mpatches.Patch(color='green', label='Heating')
+cyan_patch = mpatches.Patch(color='cyan', label='Hot Water')
+yellow_patch = mpatches.Patch(color='yellow', label='Cold Water')
+plt.legend(handles=[blue_patch,green_patch,red_patch,cyan_patch,yellow_patch])
+plt.show()
+
+
+plt.hist(nan_percentage)
+plt.xlabel(" Percentage ")
+plt.ylabel(" Number Of Meters ")
+plt.show()
+
+
+

@@ -21,68 +21,69 @@ from random import shuffle
 import time
 import zhusuan as zs
 
-## FUNCTIONS
-with tf.device('/device:GPU:0'):
-    with tf.name_scope("Bayesian_Network"):
-        @zs.reuse('model')
-        def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
-            with zs.BayesianNet(observed=observed) as model:
-                ws = []
-                for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
-                                                        layer_sizes[1:])):
-                    w_mu = tf.zeros([1, n_out, n_in + 1])
-                    ws.append(
-                        zs.Normal('w' + str(i), w_mu, std=1.,
-                                    n_samples=n_particles, group_ndims=2))
-                # forward
-                ly_x = tf.expand_dims(
-                    tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1]), 3)
-                for i in range(len(ws)):
-                    w = tf.tile(ws[i], [1, tf.shape(x)[0], 1, 1])
-                    ly_x = tf.concat(
-                        [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
-                    ly_x = tf.matmul(w, ly_x) / \
-                        tf.sqrt(tf.to_float(tf.shape(ly_x)[2]))
-                    if i < len(ws) - 1:
-                        ly_x = tf.nn.relu(ly_x)
-                print(np.shape(ly_x))
-                y_mean = tf.squeeze(ly_x, [3])
-                print(np.shape(y_mean))
-                y_logstd = tf.get_variable(
-                    'y_logstd', shape=[],
-                    initializer=tf.constant_initializer(0.))
-                noise = tf.random_normal(shape=tf.shape(y_mean), mean=0.0, stddev=0.1, dtype=tf.float32)
-                
-                y = zs.OnehotCategorical('y', y_mean+noise,dtype=tf.float32)
-               
-              #  y = zs.Normal('y', y_mean, logstd=1.)
-                #y = y_mean + noise
-            return model, y_mean
 
-    with tf.name_scope("Mean_Field_Variational"):
-        def mean_field_variational(layer_sizes, n_particles):
-            with zs.BayesianNet() as variational:
-                ws = []
-                for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
-                                                    layer_sizes[1:])):
-                    w_mean = tf.get_variable(
-                        'w_mean_' + str(i), shape=[1, n_out, n_in + 1],
-                        initializer=tf.constant_initializer(0.))
-                    w_logstd = tf.get_variable(
-                        'w_logstd_' + str(i), shape=[1, n_out, n_in + 1],
-                        initializer=tf.constant_initializer(0.))
-                    ws.append(
-                        zs.Normal('w' + str(i), w_mean, logstd=w_logstd,
-                                n_samples=n_particles, group_ndims=2))
-            return variational
-    with tf.name_scope("Log_Joint"):
-        def log_joint(observed):
-            model, _ = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
-            log_pws = model.local_log_prob(w_names)
-            print(np.shape(log_pws))
-            log_py_xw = model.local_log_prob('y')
-            print(np.shape(log_py_xw))
-            return tf.add_n(log_pws) + log_py_xw * N
+
+## FUNCTIONS
+
+@zs.reuse('model')
+def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
+    with zs.BayesianNet(observed=observed) as model:
+        ws = []
+        for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
+                                                layer_sizes[1:])):
+            w_mu = tf.zeros([1, n_out, n_in + 1])
+            ws.append(
+                zs.Normal('w' + str(i), w_mu, std=1.,
+                            n_samples=n_particles, group_ndims=2))
+        # forward
+        ly_x = tf.expand_dims(
+            tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1]), 3)
+        for i in range(len(ws)):
+            w = tf.tile(ws[i], [1, tf.shape(x)[0], 1, 1])
+            ly_x = tf.concat(
+                [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
+            ly_x = tf.matmul(w, ly_x) / \
+                tf.sqrt(tf.to_float(tf.shape(ly_x)[2]))
+            if i < len(ws) - 1:
+                ly_x = tf.nn.relu(ly_x)
+        print(np.shape(ly_x))
+        y_mean = tf.squeeze(ly_x, [3])
+        print(np.shape(y_mean))
+        y_logstd = tf.get_variable(
+            'y_logstd', shape=[],
+            initializer=tf.constant_initializer(0.))
+        noise = tf.random_normal(shape=tf.shape(y_mean), mean=0.0, stddev=0.1, dtype=tf.float32)
+        
+        y = zs.OnehotCategorical('y', y_mean+noise,dtype=tf.float32)
+        
+        #  y = zs.Normal('y', y_mean, logstd=1.)
+        #y = y_mean + noise
+    return model, y_mean
+
+    
+def mean_field_variational(layer_sizes, n_particles):
+    with zs.BayesianNet() as variational:
+        ws = []
+        for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
+                                            layer_sizes[1:])):
+            w_mean = tf.get_variable(
+                'w_mean_' + str(i), shape=[1, n_out, n_in + 1],
+                initializer=tf.constant_initializer(0.))
+            w_logstd = tf.get_variable(
+                'w_logstd_' + str(i), shape=[1, n_out, n_in + 1],
+                initializer=tf.constant_initializer(0.))
+            ws.append(
+                zs.Normal('w' + str(i), w_mean, logstd=w_logstd,
+                        n_samples=n_particles, group_ndims=2))
+    return variational
+
+def log_joint(observed):
+    model, _ = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
+    log_pws = model.local_log_prob(w_names)
+    print(np.shape(log_pws))
+    log_py_xw = model.local_log_prob('y')
+    print(np.shape(log_py_xw))
+    return tf.add_n(log_pws) / np.shape(X_train)[0] + log_py_xw
 
 
 
@@ -94,11 +95,11 @@ with tf.device('/device:GPU:0'):
 print("TF Version:", tf.__version__)
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
-path = "D:\Master_Thesis_Data\Final_Data.csv"
-path_y_hot = "D:\Master_Thesis_Data\Y_One_Hot.csv"
-path_test_data = "D:\Master_Thesis_Data\Test_Data.csv"
-path_y_hot_test = "D:\Master_Thesis_Data\Y_One_Hot_Test.csv"
-path_test_time_series = "D:\Master_Thesis_Data\Test_Time_Series.csv"
+path = "D:\Master_Thesis_Data\Final_Data24.csv"
+path_y_hot = "D:\Master_Thesis_Data\Y_One_Hot24.csv"
+path_test_data = "D:\Master_Thesis_Data\Test_Data24.csv"
+path_y_hot_test = "D:\Master_Thesis_Data\Y_One_Hot_Test24.csv"
+path_test_time_series = "D:\Master_Thesis_Data\Test_Time_Series24.csv"
 
 
 # Loading Training Data
