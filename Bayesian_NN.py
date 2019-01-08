@@ -46,18 +46,16 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
                 tf.sqrt(tf.to_float(tf.shape(ly_x)[2]))
             if i < len(ws) - 1:
                 ly_x = tf.nn.relu(ly_x)
-        print(np.shape(ly_x))
+        
         y_mean = tf.squeeze(ly_x, [3])
-        print(np.shape(y_mean))
-        y_logstd = tf.get_variable(
-            'y_logstd', shape=[],
-            initializer=tf.constant_initializer(0.))
-        noise = tf.random_normal(shape=tf.shape(y_mean), mean=0.0, stddev=0.1, dtype=tf.float32)
         
-        y = zs.OnehotCategorical('y', y_mean+noise,dtype=tf.float32)
+       # y_logstd = tf.get_variable(
+          #  'y_logstd', shape=[],
+           # initializer=tf.constant_initializer(0.))
+       # noise = tf.random_normal(shape=tf.shape(y_mean), mean=0.0, stddev=0.1, dtype=tf.float32)
         
-        #  y = zs.Normal('y', y_mean, logstd=1.)
-        #y = y_mean + noise
+        y = zs.OnehotCategorical('y', y_mean, dtype=tf.float32)
+
     return model, y_mean
 
     
@@ -76,6 +74,7 @@ def mean_field_variational(layer_sizes, n_particles):
                 zs.Normal('w' + str(i), w_mean, logstd=w_logstd,
                         n_samples=n_particles, group_ndims=2))
     return variational
+
 
 def log_joint(observed):
     model, _ = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
@@ -118,10 +117,10 @@ shape_test = [np.shape(test_data)[0],Num_Test_Customers]                    # Te
 df_y_hot_test = pd.read_csv(path_y_hot_test,sep=';',header=None)
 
 
-gurk = 1000
-y_one_hot_test = df_y_hot_test.values[:,0:gurk]
-test_data_X    = test_data[1:np.shape(test_data)[0],0:gurk] # Extract time series
-test_data_Y    = test_data[0,0:gurk]                        # Extract Labels
+
+y_one_hot_test = df_y_hot_test.values[:,:]
+test_data_X    = test_data[1:np.shape(test_data)[0],:] # Extract time series
+test_data_Y    = test_data[0,:]                        # Extract Labels
 
 
 # Test data full time series for final evaluation of sugggested method
@@ -157,98 +156,110 @@ num_classes = number_of_classes
 epsilon     = 1e-8
 
 ################ Transposing datasets for correct input shape to the network ##################
-with tf.device('/device:CPU:0'):
-    X_train =  np.transpose(X_data[:,:])
-    y_train = np.transpose(y_one_hot[:,:])
-    X_val   = np.transpose(test_data_X[:,:])
-    y_val   =  np.transpose(y_one_hot_test[:,:])
-    y_data_confusion = test_data_Y
-    N, n_x = X_train.shape
-    print("Amount of training data is: "+str(np.shape(X_train)[0]))
-    print("Amount of validation data is: "+str(np.shape(X_val)[0]))
-    # Placeholder for datavectors
-    # Define model parameters
-    n_hiddens = [150]
-    n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles') # Number of particles in each hidden layer
-    x = tf.placeholder(tf.float32, [None,n_x]) 
-    y = tf.placeholder(tf.float32, [None, number_of_classes])
-    dropout = tf.placeholder_with_default(1.0, shape=())
-    layer_sizes = [n_x] + n_hiddens + [number_of_classes] # Last one number of classes
-    print(layer_sizes)
-    print(layer_sizes[:-1])
-    print(layer_sizes[1:])
-    w_names = ['w' + str(i) for i in range(len(layer_sizes) - 1)]
-    initializer = tf.contrib.layers.xavier_initializer()
 
-    ###################################################################################################################
-    ########################################### Define the network#####################################################
-    ###################################################################################################################
+X_train =  np.transpose(X_data[:,:])
+y_train = np.transpose(y_one_hot[:,:])
+X_val   = np.transpose(test_data_X[:,:])
+y_val   =  np.transpose(y_one_hot_test[:,:])
+y_data_confusion = test_data_Y
+N, n_x = X_train.shape
+print("Amount of training data is: "+str(np.shape(X_train)[0]))
+print("Amount of validation data is: "+str(np.shape(X_val)[0]))
+# Placeholder for datavectors
+# Define model parameters
+n_hiddens = [150]
+n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles') # Number of particles in each hidden layer
+x = tf.placeholder(tf.float32, [None,n_x]) 
+y = tf.placeholder(tf.float32, [None, number_of_classes])
+dropout = tf.placeholder_with_default(1.0, shape=())
+layer_sizes = [n_x] + n_hiddens + [number_of_classes] # Last one number of classes
+print(layer_sizes)
+print(layer_sizes[:-1])
+print(layer_sizes[1:])
+w_names = ['w' + str(i) for i in range(len(layer_sizes) - 1)]
+initializer = tf.contrib.layers.xavier_initializer()
 
-
-    variational = mean_field_variational(layer_sizes, n_particles)
-    qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)
-    latent = dict(zip(w_names, qw_outputs))
-    lower_bound = zs.variational.elbo(log_joint, observed={'y': y}, latent=latent, axis=0)
-    cost = tf.reduce_mean(lower_bound.sgvb())
-    lower_bound = tf.reduce_mean(lower_bound)
-
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
-    infer_op = optimizer.minimize(cost)
+###################################################################################################################
+########################################### Define the network#####################################################
+###################################################################################################################
 
 
-    # prediction: rmse & log likelihood
-    observed = dict((w_name, latent[w_name][0]) for w_name in w_names)
-    observed.update({'y': y})
-    model, y_mean = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
-    y_pred = tf.reduce_mean(y_mean, 0)
-    y_pred = tf.nn.softmax(y_pred)
-    correct_pred = tf.equal(tf.argmax(y_pred,1),tf.argmax(y,1))
+variational = mean_field_variational(layer_sizes, n_particles)
+qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)
+latent = dict(zip(w_names, qw_outputs))
+lower_bound = zs.variational.elbo(log_joint, observed={'y': y}, latent=latent, axis=0)
+cost = tf.reduce_mean(lower_bound.sgvb())
+lower_bound = tf.reduce_mean(lower_bound)
 
-    with tf.name_scope("Evaluation"):
-        accuracy = tf.reduce_mean(tf.cast(correct_pred,tf.float32))
-    # rmse = tf.sqrt(tf.reduce_mean((y_pred - y) ** 2)) #* std_y_train
-        loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = y_pred, labels = y))
-    tf.summary.scalar('Accuracy',accuracy)
-    tf.summary.scalar('Loss',loss_op)
+optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
+infer_op = optimizer.minimize(cost)
 
-    with tf.name_scope("Likelihood"):    
-        log_py_xw = model.local_log_prob({'y': y})
-        log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0))# - \
-    # tf.log(std_y_train)
-    tf.summary.scalar('log_Likelihood', log_likelihood)
-    # Define training/evaluation parameters
-    lb_samples = 10
-    ll_samples = 500
-    epochs = 50
-    batch_size = 16
-    iters = int(np.floor(X_train.shape[0] / float(batch_size)))
-    test_freq = 5
-    merged = tf.summary.merge_all()
-    writer = tf.summary.FileWriter(r"C:\Users\cridn_000\Documents\KTH5\Master Thesis\Logs")
-    writer_scalar = tf.summary.FileWriter(r"C:\Users\cridn_000\Documents\KTH5\Master Thesis\Logs")
 
-    with tf.Session(config=config) as sess:
-        sess.run(tf.global_variables_initializer())
-        for epoch in range(1, epochs + 1):
-            lbs = []
-            for t in range(iters):
-                x_batch = X_train[t*batch_size:(t+1)*batch_size,:]
-                y_batch = y_train[t*batch_size:(t+1)*batch_size,:]
-                _, lb = sess.run(
-                    [infer_op, lower_bound],
-                    feed_dict={n_particles: lb_samples,  x: x_batch, y: y_batch})
-                lbs.append(lb)
-        # trainloss,trainacc = sess.run([loss_op,accuracy],feed_dict={n_particles: lb_samples, x: X_train, y: y_train})
+# prediction: rmse & log likelihood
+observed = dict((w_name, latent[w_name][0]) for w_name in w_names)
+observed.update({'y': y})
+model, y_mean = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
+y_pred = tf.reduce_mean(y_mean, 0)
+y_pred = tf.nn.softmax(y_pred)
+correct_pred = tf.equal(tf.argmax(y_pred,1),tf.argmax(y,1))
 
-            print('>> TRAIN')
-        # print('Epoch {}: Lower bound = {}, Loss = {}, Accuracy = {}'.format(epoch, np.mean(lbs),trainloss,trainacc))
-            print('Epoch {}: Lower bound = {},'.format(epoch,np.mean(lbs)))
-            if epoch % test_freq == 0:
-                with tf.device('/device:CPU:0'):
-                    test_lb, test_loss, test_ll,test_acc,summary = sess.run( [lower_bound, loss_op, log_likelihood,accuracy,merged],feed_dict={n_particles: ll_samples,  x: X_val, y: y_val}) # TWO LOSS OPS
-            
-                    writer_scalar.add_summary(summary,epoch)
-                    print('>> TEST')
-                    print('>> Test lower bound = {}, loss = {}, log_likelihood = {}, Accuracy = {}' .format(test_lb, test_loss, test_ll,test_acc))
+with tf.name_scope("Evaluation"):
+    accuracy = tf.reduce_mean(tf.cast(correct_pred,tf.float32))
+# rmse = tf.sqrt(tf.reduce_mean((y_pred - y) ** 2)) #* std_y_train
+    loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = y_pred, labels = y))
+tf.summary.scalar('Accuracy',accuracy)
+tf.summary.scalar('Loss',loss_op)
 
-    writer.add_graph(sess.graph) 
+with tf.name_scope("Likelihood"):    
+    log_py_xw = model.local_log_prob({'y': y})
+    log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0))# - \
+# tf.log(std_y_train)
+tf.summary.scalar('log_Likelihood', log_likelihood)
+# Define training/evaluation parameters
+lb_samples = 10
+ll_samples = 500
+epochs = 50
+batch_size = 20
+batch_size_test = 20
+iters = int(np.floor(X_train.shape[0] / float(batch_size)))
+iters_test = int(np.floor(X_val.shape[0] / float(batch_size_test)))
+test_freq = 5
+merged = tf.summary.merge_all()
+writer = tf.summary.FileWriter(r"C:\Users\cridn_000\Documents\KTH5\Master Thesis\Logs")
+writer_scalar = tf.summary.FileWriter(r"C:\Users\cridn_000\Documents\KTH5\Master Thesis\Logs")
+
+with tf.Session(config=config) as sess:
+    sess.run(tf.global_variables_initializer())
+
+    for epoch in range(1, epochs + 1):
+        lbs = []
+        for t in range(iters):
+            x_batch = X_train[t*batch_size:(t+1)*batch_size,:]
+            y_batch = y_train[t*batch_size:(t+1)*batch_size,:]
+            _, lb = sess.run(
+                [infer_op, lower_bound],
+                feed_dict={n_particles: lb_samples,  x: x_batch, y: y_batch})
+            lbs.append(lb)
+    # trainloss,trainacc = sess.run([loss_op,accuracy],feed_dict={n_particles: lb_samples, x: X_train, y: y_train})
+
+        print('>> TRAIN')
+    # print('Epoch {}: Lower bound = {}, Loss = {}, Accuracy = {}'.format(epoch, np.mean(lbs),trainloss,trainacc))
+        print('Epoch {}: Lower bound = {},'.format(epoch,np.mean(lbs)))
+        if epoch % test_freq == 0:
+            test_lbs = []
+            test_accs = []
+            test_ll = []
+            for t in range(iters_test):
+                x_batch = X_val[t * batch_size_test:(t + 1) * batch_size_test,:]
+                y_batch = y_val[t * batch_size_test:(t + 1) * batch_size_test,:]
+                test_lb, test_loss, ll,test_acc,summary = \
+                    sess.run( [lower_bound, loss_op, log_likelihood,accuracy,merged],feed_dict={n_particles: ll_samples,  x: x_batch, y: y_batch}) # TWO LOSS OPS
+                test_lbs.append(test_lb)
+                test_accs.append(test_acc)
+                test_ll.append(ll)
+                #test_preds.append(pred)
+            writer_scalar.add_summary(summary,epoch)
+            print('>> TEST')
+            print('>> Test lower bound = {}, log_likelihood = {}, Accuracy = {}' .format(np.mean(test_lbs), np.mean(test_ll),np.mean(test_accs)))
+
+writer.add_graph(sess.graph) 

@@ -48,15 +48,21 @@ def main(time_points):
     random.seed(2018)
     print("Number of time_Points is " + str(time_points))
     number_of_training_slices = 200
-    min_number_of_training_slices = 5
-    number_of_test_slices     =  50
-    min_number_of_test_slices  = 50
+    min_number_of_training_slices = 1
+    number_of_test_slices     =  200
+    min_number_of_test_slices  = 200
+
+    if number_of_test_slices == min_number_of_test_slices:
+        # Set to true if min = max in number of test slices it will balance the meters
+        testing_voting = True 
+    else:
+        testing_voting = False
     zeros_slice_percentage = 0.2
 
     
 
     class_names = [" Cooling "," Electricity ", "Heating", " Hot Water", " Cold Water "]
-    testing_voting = False # Set to true if min = max in number of test slices
+    
 
     path = "D:\Master_Thesis_Data\Concatenated_File_total.csv"
     #Hard Threshholding for removing outliers

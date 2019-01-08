@@ -12,9 +12,8 @@ import numpy as np
 import zhusuan as zs
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib import pyplot
 
-
-    ## WILL BE BAYESIAN_NN not for now
 print("TF Version:", tf.__version__)
 
 
@@ -69,6 +68,13 @@ def load_data(slice_size):
     return y_train, x_train, x_val, y_val, y_data_confusion,test_data_meter, \
         number_of_classes,number_of_meters,max_meter_number
 
+def entropy(p_vec):
+    e = 0
+    for k in range(len(p_vec)):
+        if p_vec[k] !=0:
+            e = e + p_vec[k]*np.log(p_vec[k]) 
+    return -e
+
 def main(slice_size,l):
     tf.set_random_seed(1234)
     np.random.seed(1234)
@@ -82,10 +88,15 @@ def main(slice_size,l):
     # dropout and batch normalization
 
     # Learning parameters
-    learning_rate = 0.001
-    zero_factor = 0.3
+    
+    zero_factor = 0.2
     batchsize = 50
+    epochs = 15
     test_one_meter = False 
+    entropy_checking = False
+    learning_rate = 0.001
+    anneal_lr_freq = 1
+    anneal_lr_rate = 0.98
 
     # Number of hidden nodes in the network
     N1 = 100
@@ -119,42 +130,25 @@ def main(slice_size,l):
     def mlp(X, weights, biases,dropout,istraining):
         with tf.name_scope("Layer_1"):
             #Layer One
-           # fc1 = tf.nn.bias_add(tf.matmul(X,weights['wh1']),biases['b1'])
             fc1 = tf.matmul(X,weights['wh1'])
             fc1 = tf.layers.batch_normalization(fc1,training = istraining)
-           # batch_mean1,batch_variance1 = tf.nn.moments(fc1,[0])
-           # fc1 = tf.nn.batch_normalization(fc1,batch_mean1,batch_variance1,biases['beta1'],biases['scale1'],epsilon) 
-            #fc1 = tf.contrib.layers.batch_norm(fc1,is_training=istraining)
-            #fc1 = tf.layers.batch_normalization(fc1, training=istraining)
             fc1 = tf.nn.relu(fc1)
             fc1 = tf.nn.dropout(fc1,dropout)
         with tf.name_scope("Layer_2"):
             # Layer Two
-            #fc2 = tf.nn.bias_add(tf.matmul(fc1,weights['wh2']),biases['b2'])
             fc2 = tf.matmul(fc1,weights['wh2'])
-           # batch_mean2,batch_variance2 = tf.nn.moments(fc2,[0])
-            #fc2 = tf.nn.batch_normalization(fc2,batch_mean2,batch_variance2,biases['beta2'],biases['scale2'],epsilon) 
-            #fc2 = tf.contrib.layers.batch_norm(fc2,is_training=istraining)
             fc2 = tf.layers.batch_normalization(fc2, training=istraining)
             fc2 = tf.nn.relu(fc2)
             fc2 = tf.nn.dropout(fc2,dropout)
         with tf.name_scope("Layer_3"):
             # Layer Three
-          #  fc3 = tf.nn.bias_add(tf.matmul(fc2,weights['wh3']),biases['b3'])
             fc3 = tf.matmul(fc2,weights['wh3'])
-          #  batch_mean3,batch_variance3 = tf.nn.moments(fc3,[0])
-           # fc3 = tf.nn.batch_normalization(fc3,batch_mean3,batch_variance3,biases['beta3'],biases['scale3'],epsilon) 
-           # fc3 = tf.contrib.layers.batch_norm(fc3,is_training=istraining)
             fc3 = tf.layers.batch_normalization(fc3, training=istraining)
             fc3 = tf.nn.relu(fc3)
             fc3 = tf.nn.dropout(fc3,dropout)
-     
-
         with tf.name_scope("Output_Layer"):
             # Return outputs
             pred = tf.nn.bias_add(tf.matmul(fc3,weights['out']),biases['biout'])
-            #pred  =tf.nn.relu(pred)
-
         return pred
 
     ################################### Set weights and biases ###################################
@@ -165,7 +159,6 @@ def main(slice_size,l):
         'wh2': tf.Variable(initializer([N1,N2])),
         # Third hidden layer
         'wh3': tf.Variable(initializer([N2,N3])),
-       
         # Output layer
         'out': tf.Variable(initializer([N3,num_classes]))
     }
@@ -219,16 +212,18 @@ def main(slice_size,l):
     
 
     #writer = tf.summary.FileWriter("C:\Users\cridn_000\Documents\KTH5\Master Thesis\Logs")
-    learning_rate = 0.001
-    anneal_lr_freq = 1
-    anneal_lr_rate = 0.98
+    
     ########################################## SESSION ################################33
 
     with tf.Session() as sess:
         t1 = time.time()
         sess.run(init)
         print("Optimization Started")
-        for epoch in range(15):
+
+        for epoch in range(epochs+1):
+            test_entropies_correct = []
+            test_entropies_wrong   = []
+
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
             indices = np.random.permutation(X_train.shape[0])
@@ -242,7 +237,7 @@ def main(slice_size,l):
                 sess.run(train_op,feed_dict={X: batch_X, y: batch_y, dropout: 0.7, \
                     learning_rate_ph: learning_rate, istraining: True})
 
-            valloss,valacc = sess.run([loss_op,accuracy], \
+            valloss,valacc,P_vector,ypred = sess.run([loss_op,accuracy,prediction,y_pred], \
                 feed_dict={X: X_val, y: y_val, dropout: 1,istraining: False})
             
             trainloss,trainacc = sess.run([loss_op,accuracy], \
@@ -255,12 +250,34 @@ def main(slice_size,l):
             val_acc.append(valacc)
             train_loss.append(trainloss)
             train_acc.append(trainacc)
-           
 
+            ############################# 
+            # Monitoring the entropy of the probability vectors#
+            ########################
+            if epoch%5 == 0 and entropy_checking == True:
+                for i in range(np.shape(P_vector)[0]):
+                    # Looping through each probability vector
+                    if ypred[i] + 1 == y_data_confusion[i]:
+                        # Correct pred
+                        test_entropies_correct.append(entropy(P_vector[i,:]))
+                    else:
+                        test_entropies_wrong.append(entropy(P_vector[i,:]))
+                print(np.mean(test_entropies_correct))
+                print(np.mean(test_entropies_wrong))
+                bins = np.linspace(0.5, 1.5, 100)
+                pyplot.hist(test_entropies_correct, bins,color='r', alpha=0.5, label='Correct Predictions')
+                pyplot.hist(test_entropies_wrong, bins,color='b' ,alpha=0.5, label='Wrong Predictions')
+                pyplot.legend(loc='upper right')
+                plt.title("Distribution Of Entropy of Likelihood")
+                pyplot.show()
 
         print("Optimization Finished")
         print(" Checking the Confusion Matrix ")
+        a2_test,return_index2,return_counts2 = np.unique(y_data_confusion,return_index = True, return_counts = True)
 
+        
+        print(return_counts2)
+        print(return_index2)
         preds  = sess.run( y_pred,
                             feed_dict={X: X_val, dropout: 1,istraining: False}) + 1 
         conf =  confusion_matrix(y_data_confusion, preds)
@@ -269,19 +286,16 @@ def main(slice_size,l):
         ########################## FINAL TEST ACCURACY CHECKING ############################
         ####################################################################################
                         ##################################################
-            
-       
-        
-        
+
         ## Running test inference on the different time-series
         print("Starting To Compute The final test accuracy")
         print("Doing this for a varied number of minimal samples")
         fin_acc = []
-        for min_num_of_test_samples in range(0, 1, 1):
+        for min_num_of_test_samples in range(1, 20, 5):
             
             correct_test_prediction = []
-            num_of_test_samples = 3000
-            min_num_of_test_samples = 1
+            num_of_test_samples = 300
+            #min_num_of_test_samples = 1
             #min_num_of_test_samples = 5
             # start looping through each separate time series
             
@@ -297,6 +311,7 @@ def main(slice_size,l):
                 feed_data_test =[]
                 test_label = []
                 preds = []
+                entropies = []
                 count=0
                 for i in range(np.shape(X_val)[0]): # Looping through each samples
                     tmp = int(test_data_meter[i])      # Temporary Meter Variable
@@ -308,8 +323,7 @@ def main(slice_size,l):
                         count_meter[tmp] = count_meter[tmp] + 1
                         count = count+1
 
-                #print(count)
-                #print(count)
+            
                 # Make predictions for the slices of meter k
                 if count >= min_num_of_test_samples:
                     # get return counts for each classes
@@ -320,14 +334,22 @@ def main(slice_size,l):
                     for t in range(iters_temp):
                         feed_data_test_batch = feed_data_big[t * batch_size_temp:(t + 1) * batch_size_temp,:]
                         
-                        pred_temp = sess.run(
-                            y_pred,
-                            feed_dict={X: feed_data_test_batch, dropout: 1,istraining: False}) + 1
+                        pred_temp,pvec_temp = sess.run(
+                            [y_pred,prediction],
+                            feed_dict={X: feed_data_test_batch, dropout: 1,istraining: False})
                         
-                        preds.append(pred_temp)
-                    
+                        entropies.append(entropy(np.squeeze(pvec_temp)))
+                        preds.append(pred_temp+1)
+
+                    indtmp =  np.argsort(entropies)
+                      
+                    new_preds=[]
+                    for i in range(int(np.ceil(len(entropies)*1))):
+                        new_preds.append(preds[indtmp[i]])
+
+
                 #  preds =  sess.run( y_pred,feed_dict={X: feed_data_big, dropout: 1}) + 1
-                    a,return_index,return_counts = np.unique(preds, return_index=True, return_counts=True)
+                    a,return_index,return_counts = np.unique(new_preds, return_index=True, return_counts=True)
                     final_pred = a[np.argmax(return_counts)]
                     if int(final_pred) == int(test_label[0]):
                         correct_test_prediction.append(1)
@@ -344,7 +366,9 @@ def main(slice_size,l):
             
             print("Time-Elapsed is " + str((t2-t1)/60) +" minutes.")
             fin_acc.append(final_test_accuracy)
-
+           #################################################
+           # THIS PART WILL PERFORM THE VOTING FOR 1 METER #
+           # ############################################### 
         if(test_one_meter == True):
             for meter_number in np.unique(test_data_meter):
                 # Perform testing on one meter to compare accuracies
@@ -412,8 +436,7 @@ def main(slice_size,l):
     if os.path.exists(filename + ".csv"):
         print("Removing old "+ filename + ".csv"+ " before writing new.")
         os.remove(filename_left_out_slice + ".csv")
-    plt.figure(1)
-    plt.plot(np.arange(0,1,1),fin_acc)
+    
     plt.ylabel(" Voting Accuracy ")
     plt.xlabel(" Number of Slices Per Meter ")
     plt.show()

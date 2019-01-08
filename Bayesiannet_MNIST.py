@@ -99,7 +99,7 @@ if __name__ == '__main__':
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
 
-    _, h_pred = var_dropout(dict(zip(e_names, qe_samples)),
+    model, h_pred = var_dropout(dict(zip(e_names, qe_samples)),
                             x_obs, n, net_size,
                             n_particles, is_training)
     h_pred = tf.reduce_mean(tf.nn.softmax(h_pred), 0)
@@ -109,6 +109,12 @@ if __name__ == '__main__':
     learning_rate_ph = tf.placeholder(tf.float32, shape=())
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     infer = optimizer.minimize(cost)
+
+
+    modeleval,_ = var_dropout({},
+                            x_obs, n, net_size,
+                            n_particles, is_training)
+    log_py_xe = modeleval.local_log_prob('y')
 
     params = tf.trainable_variables()
     for i in params:
@@ -144,18 +150,23 @@ if __name__ == '__main__':
                 time_test = -time.time()
                 test_lbs = []
                 test_accs = []
+                test_ll = []
                 for t in range(10):
                     x_batch = x_test[t * 1000:(t + 1) * 1000,:,:].reshape([1000,n_x])
                     y_batch = y_test[t * 1000:(t + 1) * 1000]
-                    lb, acc1 = sess.run(
-                        [lower_bound, acc],
+                    lb, acc1,likelihood = sess.run(
+                        [lower_bound, acc,log_py_xe],
                         feed_dict={n_particles: ll_samples,
                                    is_training: False,
                                    x: x_batch, y: y_batch})
                     test_lbs.append(lb)
                     test_accs.append(acc1)
+                    print(np.shape(likelihood))
+                    test_ll.append(likelihood)
                 time_test += time.time()
+
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
                 print('>> Test accuaracy = {}'.format(np.mean(test_accs)))
+                print(">> Test Likelihood = {}".format(np.mean(likelihood)))
         print("DONE!")

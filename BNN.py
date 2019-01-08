@@ -12,6 +12,7 @@ import numpy as np
 import zhusuan as zs
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib import pyplot
 
 def load_data(slice_size):
         # This function loads all of the data that is used for training, takes slice_size as parameter
@@ -118,6 +119,15 @@ def log_joint(observed):
 
 #/ x_train.shape[0]
 
+def entropy(p_vec):
+    
+    e = 0
+    for k in range(len(p_vec)):
+        if p_vec[k] !=0:
+            e = e + p_vec[k]*np.log(p_vec[k]) 
+    return -e
+
+
 if __name__ == '__main__':
     tf.set_random_seed(1234)
     np.random.seed(1234)
@@ -134,17 +144,18 @@ if __name__ == '__main__':
     
     y_test = y_test.astype(int)-1
     # Define training/evaluation parameters
-    epochs = 5
+    epochs = 20
     batch_size = 20
     batch_size_test = 20
     lb_samples = 30
     ll_samples = 500
     iters = int(np.floor(x_train.shape[0] / float(batch_size)))
     iters_test = int(np.floor(x_test.shape[0] / float(batch_size_test)))
-    test_freq = 1
+    test_freq = 4
     learning_rate = 0.001
     anneal_lr_freq = 100
     anneal_lr_rate = 0.75
+    entropy_checking = False
 
     # placeholders
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
@@ -156,7 +167,7 @@ if __name__ == '__main__':
 
 
 
-    net_size = [n_x, 100, 100, 100, 4]
+    net_size = [n_x, 100, 100, 100, number_of_classes]
     W_names = ['layer' + str(i) + '/eps' for i in range(len(net_size) - 1)]
 
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
@@ -176,6 +187,7 @@ if __name__ == '__main__':
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
     
+    lower_bound_exp = zs.variational.elbo(log_joint,{'y': y_obs},W_dict,axis=0)
     
     # Predictions
     model, h_pred = var_dropout(dict(zip(W_names, qW_samples)),
@@ -230,33 +242,55 @@ if __name__ == '__main__':
                 test_accs = []
                 test_ll = []
                 test_preds = []
+                test_entropies_correct = []
+                test_entropies_wrong   = []
                 for t in range(iters_test):
                     x_batch = x_test[t * batch_size_test:(t + 1) * batch_size_test,:]
                     y_batch = y_test[t * batch_size_test:(t + 1) * batch_size_test]
-                    lb, acc1,ll,pred = sess.run(
-                        [lower_bound, acc,log_likelihood,h_pred],
+                    lb, acc1,ll,pred_vec,y_preds = sess.run(
+                        [lower_bound, acc,log_likelihood,h_pred,y_pred],
                         feed_dict={n_particles: ll_samples,
                                    is_training: False,
                                    x: x_batch, y: y_batch})
+
                     test_lbs.append(lb)
                     test_accs.append(acc1)
                     test_ll.append(ll)
-                    test_preds.append(pred)
+                    if(entropy_checking == True): 
+                        ###########################################################################
+                        # Want to collect entropies as functions of correct or wrong predictions  #
+                        ###########################################################################
+                        for i in range(batch_size_test): 
+                            if y_preds[i] == y_batch[i]:
+                                test_entropies_correct.append(entropy(pred_vec[i,:]))
+                            else:
+                                test_entropies_wrong.append(entropy(pred_vec[i,:]))
+
                     
+                if(entropy_checking == True):
+                    print(np.mean(test_entropies_correct))
+                    print(np.mean(test_entropies_wrong))
+                    bins = np.linspace(0.5, 1.5, 100)
+                    pyplot.hist(test_entropies_correct, bins, alpha=0.5, label='Correct Predictions')
+                    pyplot.hist(test_entropies_wrong, bins, alpha=0.5, label='Wrong Predictions')
+                    pyplot.legend(loc='upper right')
+                    plt.title("Distribution Of Entropy of Likelihood")
+                    pyplot.show()
                 time_test += time.time()
-                print(np.mean(pred,axis = 0))
+               # print(np.mean(pred,axis = 0))
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
                 print('>> Test accuracy = {},  log(p(y|x,W)) = {} '.format(np.mean(test_accs), (np.mean(test_ll))))
+
 
         ## Running test inference on the different time-series
         print("Starting To Compute The final test accuracy")
         fin_acc = []
         num_met =[]
-        for min_num_of_test_samples in range(0, 1, 1):    
+        for min_num_of_test_samples in range(1,50,5):    
             correct_test_prediction = []
-            num_of_test_samples = 3000
-            min_num_of_test_samples = 50
+            num_of_test_samples = 50
+            #min_num_of_test_samples = 1
             # start looping through each separate time series
             
             count_class = np.zeros([ number_of_classes ])
@@ -271,6 +305,7 @@ if __name__ == '__main__':
                 feed_data_test =[]
                 test_label = []
                 preds = []
+                entropies = []
                 count=0
                 for i in range(np.shape(x_test)[0]): # Looping through each samples
                     tmp = int(test_data_meter[i])      # Temporary Meter Variable
@@ -294,16 +329,41 @@ if __name__ == '__main__':
                     for t in range(iters_temp):
                         feed_data_test_batch = feed_data_big[t * batch_size_temp:(t + 1) * batch_size_temp,:]
                         
-                        pred_temp = sess.run(
-                            [y_pred],
-                            feed_dict={n_particles: ll_samples,
-                                    is_training: False,
-                                    x: feed_data_test_batch})
-                        
-                        preds.append(pred_temp)
-                    
+                        if(True):
+                            ytmp = sess.run(
+                                [h_pred],
+                                feed_dict={n_particles: ll_samples,
+                                        is_training: False,
+                                        x: feed_data_test_batch})
 
-                    a,return_index,return_counts = np.unique(preds, return_index=True, return_counts=True)
+                            
+                            ytmp = np.squeeze(ytmp)
+                            
+                            entropies.append(entropy(ytmp))
+                            #if entropies[k] < 0.25:
+                            pred_temp = np.argmax(ytmp)
+                            preds.append(pred_temp)
+                        
+                        if(False):
+                            lb = []
+                            
+                            xtmp = feed_data_test_batch
+                            for k in range(number_of_classes):
+                                ys = [k]
+                                lb.append(sess.run([lower_bound],feed_dict={n_particles: ll_samples,is_training: False, x: xtmp, y: ys }))
+                            pred_temp = np.argmax(lb)
+                        
+                            preds.append(pred_temp)
+                    
+                    if len(preds) > 0:
+                        
+                        indtmp =  np.argsort(entropies)
+                      
+                        new_preds=[]
+                        for i in range(int(np.ceil(len(entropies)*1))):
+                            new_preds.append(preds[indtmp[i]])
+                        
+                    a,return_index,return_counts = np.unique(new_preds, return_index=True, return_counts=True)
                     final_pred = a[np.argmax(return_counts)]
                     if int(final_pred) == int(test_label[0]):
                         correct_test_prediction.append(1)

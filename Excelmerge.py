@@ -23,7 +23,7 @@ path.append("D:\Master_Thesis_Data\Data_Big\cooling")
 path.append("D:\Master_Thesis_Data\Data_Big\electricity\energy")
 path.append("D:\Master_Thesis_Data\Data_Big\heating\energy")
 #path.append("D:\Master_Thesis_Data\Data_Big\hot_water")
-#path.append("D:\Master_Thesis_Data\Data_Big\water")
+path.append("D:\Master_Thesis_Data\Data_Big\water")
 
 
 
