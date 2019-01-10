@@ -291,11 +291,11 @@ def main(slice_size,l):
         print("Starting To Compute The final test accuracy")
         print("Doing this for a varied number of minimal samples")
         fin_acc = []
-        for min_num_of_test_samples in range(1, 20, 5):
+        for num_of_test_samples in range(1, 500, 10):
             
             correct_test_prediction = []
-            num_of_test_samples = 300
-            #min_num_of_test_samples = 1
+           # num_of_test_samples = 30000
+            min_num_of_test_samples = 1
             #min_num_of_test_samples = 5
             # start looping through each separate time series
             
@@ -344,7 +344,7 @@ def main(slice_size,l):
                     indtmp =  np.argsort(entropies)
                       
                     new_preds=[]
-                    for i in range(int(np.ceil(len(entropies)*1))):
+                    for i in range(int(np.ceil(len(entropies)*0.1))):
                         new_preds.append(preds[indtmp[i]])
 
 

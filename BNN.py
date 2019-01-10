@@ -287,10 +287,10 @@ if __name__ == '__main__':
         print("Starting To Compute The final test accuracy")
         fin_acc = []
         num_met =[]
-        for min_num_of_test_samples in range(1,50,5):    
+        for gurk in [1,0.1,0.2,0.5,0.8]: #range(1,50,5):    
             correct_test_prediction = []
-            num_of_test_samples = 50
-            #min_num_of_test_samples = 1
+            num_of_test_samples = 30000
+            min_num_of_test_samples = 1
             # start looping through each separate time series
             
             count_class = np.zeros([ number_of_classes ])
@@ -360,7 +360,7 @@ if __name__ == '__main__':
                         indtmp =  np.argsort(entropies)
                       
                         new_preds=[]
-                        for i in range(int(np.ceil(len(entropies)*1))):
+                        for i in range(int(np.ceil(len(entropies)*gurk))):
                             new_preds.append(preds[indtmp[i]])
                         
                     a,return_index,return_counts = np.unique(new_preds, return_index=True, return_counts=True)

@@ -12,17 +12,12 @@ import matplotlib as mpl
 ## INTERPOLATIONFUNCTION FOR SLICES
 
 def interp(slice):
-    
+    # This function interpolates some missing values in a slice
     # Finding positive indices to build function
     ind = np.where(slice >= 0)
     y = slice[ind]
-
-    
     f = interpolate.interp1d(ind[0],y, fill_value= "extrapolate",kind='quadratic')
-
-
     xnew = np.arange(0,np.shape(slice)[0] , 1)
-
     ynew = f(xnew)
     ynew[np.where(ynew < 0)] = 0 # Avoids extrapolating into negative numbers
     return ynew
@@ -47,20 +42,25 @@ def main(time_points):
     np.random.seed(seed=2018)
     random.seed(2018)
     print("Number of time_Points is " + str(time_points))
+    ###########################################################################################################
+    ## These hyperparameters bounds how many slices is extracted from each meter, min and max number ##########
+    #############################################################################################################
     number_of_training_slices = 200
     min_number_of_training_slices = 1
-    number_of_test_slices     =  200
-    min_number_of_test_slices  = 200
+    number_of_test_slices     =  30000
+    min_number_of_test_slices  = 1
+    
+    zeros_slice_percentage = 0.2 # Percentage of zeros that is allowed for each slice
+    ##########################################################################
 
     if number_of_test_slices == min_number_of_test_slices:
         # Set to true if min = max in number of test slices it will balance the meters
         testing_voting = True 
     else:
         testing_voting = False
-    zeros_slice_percentage = 0.2
-
     
 
+    
     class_names = [" Cooling "," Electricity ", "Heating", " Hot Water", " Cold Water "]
     
 
@@ -125,16 +125,14 @@ def main(time_points):
         label = y[j]
         count = 0
         for i in range(int(np.shape(X)[0] / time_points)):  # Looping over the number of chunks assuming no overlap
-            # In this statement we take the chunks where all values are greater or equal to zero(I.e excluding the NaN) and where there are at most 25% values equal to zero.
-            #Then append them in X_resampled
-            # Take 10 non Constant Slices from each sample
+            
     
-        #  if count < num_of_training_slices: # Change this to change the number of snippets from each time-series
+        
             if  np.all(booleans[i*time_points:i*time_points+time_points,j]) == True and \
             np.sum(booleans2[i*time_points:i*time_points+time_points,j]) <= time_points*zeros_slice_percentage and\
             np.var(X[i*time_points:i*time_points+time_points,j]) > 1e-3:
 
-               
+                
 
                 var = np.var(X[i*time_points:i*time_points+time_points,j]) # Adding some augmentation to the data random noise
 
@@ -151,7 +149,7 @@ def main(time_points):
                 # Filling NaN's with interpolation if the number of NaN's per slice is below some limit
                 
                 out = interp(X[i*time_points:i*time_points+time_points,j])
-               
+                
                 X_resampled.append(out)
 
                 y_resampled.append(label)
@@ -178,8 +176,7 @@ def main(time_points):
         count = 0
         
         for i in range(int(np.shape(X_test)[0] / time_points)):  # Looping over the number of chunks assuming no overlap
-            # In this statement we take the chunks where all values are greater or equal to zero(I.e excluding the NaN) and where there are at most 25% values equal to zero.
-            #Then append them in X_resampled
+            
     
             if  np.all(booleans_test[i*time_points:i*time_points+time_points,j]) == True and np.sum(booleans2_test[i*time_points:i*time_points+time_points,j]) <= time_points*zeros_slice_percentage: 
                 if np.var(X_test[i*time_points:i*time_points+time_points,j]) > 1e-3:  # Avoid having all the same inputs, want to capture some patterns
@@ -209,11 +206,7 @@ def main(time_points):
     
     
     # Create Loop for taking max number of samples from each meter
-    # TO DO :
-    # Create a matrix of x_resampled and x_resampled_test where slices from each meter are appended to each column --> 
-    # a matrix with time_series of meters where each meter corrrespons to a list
-    # use a dictionary  
-    # DONE!                                   
+                                    
     X_resampled      = [[] for _ in range(meter_range+1)]
     X_resampled_test = [[] for _ in range(meter_range_test+1)]
     count_meter      = np.zeros(meter_range+1) # Number of meters in training set
@@ -266,19 +259,14 @@ def main(time_points):
     
 
 
-    ##### Need to sort X_big and X_big_test by classes, how to do this: 
-    # Create new subsets and then randomly pruning them to the same size?
-    # Same approach as previously, 
-
-
-    # Tring to only sort the test set for now
+    ##### Need to sort X_big_test by classes in the case where min = max: 
+   
     if (testing_voting == True):
         labels = []
         # Assuming now that each meter has the sane number of slices we will find the class with the fewest number of meters
         for k in range(len(X_resampled_test)):
             labels.append(X_resampled_test[k][0][1])    #[k]: meter [0] take first slice [1] class of slices, same for all slices in meter k
-           # for l in range(10):
-            #    print(X_resampled_test[k][l][1]) #Sanity Check
+           
         # Labels contain the labels for all the meters in the test set.
         a,return_index,return_counts = np.unique(labels, return_index=True, return_counts=True)
         # Return counts will give us the smallest number of meters in a class.
@@ -296,20 +284,6 @@ def main(time_points):
                 # Need to add to count_classes[index]!!!
         data_shuffeled_test = np.stack(list(itertools.chain.from_iterable(X_resampled_test)) , axis = -1)
 
-
-
-
-                                 
-    
-                                        
-    # To keep rest of code running we remove first row so we are left with data containg the label and the data.
-    #X_big      = np.zeros([np.shape(X_big_tmp)[0],np.shape(X_big_tmp)[1]])
-    #X_big_test = np.zeros([np.shape(X_big_test_tmp)[0],np.shape(X_big_test_tmp)[1]])
-    #X_big[:,:]      = X_big_tmp[:,:]
-    #X_big_test[:,:] = X_big_test_tmp[:,:]                                  
-    
-   # print(np.shape(X_big))
-    #print(np.shape(X_big_test))
 
     # Sorting the datamatrices in order to take same number of samples from each class
     X_big = X_big[:,np.argsort(X_big[1,:])]
@@ -346,19 +320,8 @@ def main(time_points):
         indexvector_test = np.arange(0,np.shape(X_big_test)[1])
         data_shuffeled_test = np.ones([time_points+2,number_of_classes*min_number_of_samples_test])
 
-       # We have to select min_number_of samples from all the classes, but the problem is that we cannot do this randomly if we want to maintain the meter balance,
-       # 
-       # Have to do this in a more controlled way! loop?
-       # 
- 
-    
-    #  What needs to be done is to create a function which takes the min number of samples from each class,
-    #  but also takes at least min_number_of_test_slices from each meter ! HOW TO DO THIS???? 
-    # have to map indices of
-    # Now we have 
-    # We can now balance the datasets based on classes  
+        
 
-    
 
     for i in range(number_of_classes):
         #Picks min_number_of_samples random indices from each class and puts them in the final data array.
@@ -415,7 +378,7 @@ def main(time_points):
         for p in range(number_of_classes):
             if p+1 == data_shuffeled[1,k]:
                 y_one_hot[p,k] = 1
-    #print(np.shape(y_one_hot)[1])
+    
 
     y_one_hot_test = np.zeros([number_of_classes,np.shape(data_shuffeled_test)[1]])
     for k in range(np.shape(data_shuffeled_test)[1]):
@@ -451,11 +414,7 @@ def main(time_points):
         os.remove(filename_y_one_hot_test + ".csv")
     np.savetxt(filename_y_one_hot_test + ".csv", y_one_hot_test ,delimiter = ';') # Prints data to file
 
-    #filename_left_out_slice = "D:\Master_Thesis_Data\Left_Out_Data"
-    #if os.path.exists(filename_left_out_slice + ".csv"):
-      #  print("Removing old "+ filename_left_out_slice + ".csv"+ " before writing new.")
-      #  os.remove(filename_left_out_slice + ".csv")
-   # np.savetxt(filename_left_out_slice +".csv", np.transpose(left_out_slice),delimiter = ';')
+    
 
     t1 = time.time()
     print("Code ran in:" +str(np.round((t1-t0)/60,decimals=3)) +" minutes.")
