@@ -91,7 +91,7 @@ def main(slice_size,l):
     
     zero_factor = 0.2
     batchsize = 50
-    epochs = 15
+    epochs = 50
     test_one_meter = False 
     entropy_checking = False
     learning_rate = 0.001
@@ -291,14 +291,14 @@ def main(slice_size,l):
         print("Starting To Compute The final test accuracy")
         print("Doing this for a varied number of minimal samples")
         fin_acc = []
-        for num_of_test_samples in range(1, 500, 10):
+        for num_of_test_samples in range(1, 60, 3):
             
             correct_test_prediction = []
-           # num_of_test_samples = 30000
+            #num_of_test_samples = 30000
             min_num_of_test_samples = 1
             #min_num_of_test_samples = 5
             # start looping through each separate time series
-            
+            print(num_of_test_samples)
             count_class = np.zeros([ number_of_classes ])
             count_meter = np.zeros([ max_meter_number + 1 ])
             test_label = []

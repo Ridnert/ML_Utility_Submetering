@@ -144,7 +144,7 @@ if __name__ == '__main__':
     
     y_test = y_test.astype(int)-1
     # Define training/evaluation parameters
-    epochs = 20
+    epochs = 10
     batch_size = 20
     batch_size_test = 20
     lb_samples = 30
@@ -287,9 +287,10 @@ if __name__ == '__main__':
         print("Starting To Compute The final test accuracy")
         fin_acc = []
         num_met =[]
-        for gurk in [1,0.1,0.2,0.5,0.8]: #range(1,50,5):    
+        for num_of_test_samples in range(1,60,3):#[1,0.1,0.2,0.5,0.8]: #    
             correct_test_prediction = []
-            num_of_test_samples = 30000
+            #num_of_test_samples = 30000
+            gurk = 1
             min_num_of_test_samples = 1
             # start looping through each separate time series
             

@@ -23,7 +23,7 @@ def interp(slice):
     return ynew
 
 def shuffle_data(input_data):
-    np.random.seed(seed=2018)
+   # np.random.seed(seed=2018)
     index  = np.arange(0,np.shape(input_data)[1])
     choice = np.random.choice(index,np.shape(input_data)[1],replace=False)
     output_data = np.zeros(np.shape(input_data))
@@ -39,15 +39,15 @@ def count_nans(input_time_series):
 
 def main(time_points):
     t0 = time.time()
-    np.random.seed(seed=2018)
-    random.seed(2018)
+    #np.random.seed(seed=2018)
+    #random.seed(2018)
     print("Number of time_Points is " + str(time_points))
     ###########################################################################################################
     ## These hyperparameters bounds how many slices is extracted from each meter, min and max number ##########
     #############################################################################################################
     number_of_training_slices = 200
     min_number_of_training_slices = 1
-    number_of_test_slices     =  30000
+    number_of_test_slices     =  300
     min_number_of_test_slices  = 1
     
     zeros_slice_percentage = 0.2 # Percentage of zeros that is allowed for each slice
@@ -61,7 +61,6 @@ def main(time_points):
     
 
     
-    class_names = [" Cooling "," Electricity ", "Heating", " Hot Water", " Cold Water "]
     
 
     path = "D:\Master_Thesis_Data\Concatenated_File_total.csv"
@@ -91,7 +90,10 @@ def main(time_points):
     max_length = np.shape(data)[0]
     number_of_classes = len(np.unique(data[0,:]))
 
-
+    if number_of_classes==5:
+        class_names = [" Cooling "," Electricity ", "Heating", " Hot Water", " Cold Water "]
+    else:
+        class_names = [" Cooling "," Electricity ", "Heating", " Cold Water "]
     training_percentage = 0.8
     threshhold = 1e16              # To remove outliers                         
         # 720 is one month 9000 a year
@@ -242,7 +244,7 @@ def main(time_points):
         plt.title("Class: " + class_names[k])
         plt.xlabel("Number of Slices")
         plt.ylabel("Number of Meters")
-        plt.show()
+        #plt.show()
     #########################################################################
     # Delete the lists i.e meters containing less than min number of slices #
     #########################################################################
@@ -316,11 +318,11 @@ def main(time_points):
     
     
     data_shuffeled = np.ones([time_points+2,number_of_classes*min_number_of_samples]) #Preallocate memory for final data array.
-    if (testing_voting == False):
-        indexvector_test = np.arange(0,np.shape(X_big_test)[1])
-        data_shuffeled_test = np.ones([time_points+2,number_of_classes*min_number_of_samples_test])
+   # if (testing_voting == False):
+    #    indexvector_test = np.arange(0,np.shape(X_big_test)[1])
+    #    data_shuffeled_test = np.ones([time_points+2,number_of_classes*min_number_of_samples_test])
 
-        
+    data_shuffeled_test = X_big_test    
 
 
     for i in range(number_of_classes):
@@ -329,11 +331,11 @@ def main(time_points):
                                        min_number_of_samples,replace=False) 
         data_shuffeled[:,i*min_number_of_samples:(i+1)*min_number_of_samples] = \
         X_big[:,indexchoice]
-        if(testing_voting == False):
-            indexchoice_test = np.random.choice(indexvector_test[return_index_test[i]:return_index_test[i]+return_counts_test[i]],\
-                                                min_number_of_samples_test,replace=False)
-            data_shuffeled_test[:,i*min_number_of_samples_test:i*min_number_of_samples_test+min_number_of_samples_test] = \
-            X_big_test[:,indexchoice_test]
+        #if(testing_voting == False):
+         #   indexchoice_test = np.random.choice(indexvector_test[return_index_test[i]:return_index_test[i]+return_counts_test[i]],\
+         #                                       min_number_of_samples_test,replace=False)
+          #  data_shuffeled_test[:,i*min_number_of_samples_test:i*min_number_of_samples_test+min_number_of_samples_test] = \
+           # X_big_test[:,indexchoice_test]
 
     print(np.any(np.isnan(data_shuffeled)))
     print(np.any(np.isnan(data_shuffeled_test)))
